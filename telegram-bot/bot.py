@@ -81,8 +81,8 @@ def _read_enabled_mcp_servers(base_dir: Path) -> list[str]:
 
     payload = json.loads(rendered_path.read_text(encoding="utf-8"))
     servers = payload.get("mcpServers")
-    if not isinstance(servers, dict) or not servers:
-        raise RuntimeError(f"No mcpServers found in active MCP config: {rendered_path}")
+    if not isinstance(servers, dict):
+        raise RuntimeError(f"Invalid mcpServers in active MCP config: {rendered_path}")
 
     return [name for name in servers.keys() if isinstance(name, str) and name]
 
@@ -767,7 +767,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if await _reject_if_unauthorized(update):
         return
     await update.message.reply_text(
-        f"Llamagram bot online (agent={CONFIG.agent_name}).\n"
+        f"llamagram bot online (agent={CONFIG.agent_name}).\n"
         "Commands:\n"
         "/help - show help\n"
         "/images - image support status\n"
@@ -856,7 +856,7 @@ async def image_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 def main() -> None:
-    logger.info("Starting Llamagram Telegram bot")
+    logger.info("Starting llamagram Telegram bot")
     logger.info("Agent=%s system_prompt=%s", CONFIG.agent_name, SYSTEM_PROMPT_PATH)
     logger.info("Enabled MCP servers=%s", CONFIG.enabled_mcp_servers)
     logger.info("Image support=%s", CONFIG.image_support_enabled)
