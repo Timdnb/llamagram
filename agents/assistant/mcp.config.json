@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "time": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with",
+        "mcp",
+        "python",
+        "${ROOT_DIR}/mcps/servers/time/server.py",
+        "--local-timezone=${AGENT_MCP_LOCAL_TIMEZONE}"
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+.vscode/
+.state/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.local
+telegram-bot/.venv/
+telegram-bot/logs/
+TODO.md
