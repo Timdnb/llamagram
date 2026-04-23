@@ -16,7 +16,7 @@
 ### Included example agents
 
 - `assistant`: general starter profile
-- `beepboop`: playful assistant, no MCP tools
+- `beepboop`: playful assistant, no tools
 - `timekeeper`: always responds with current time, uses the local `time` MCP server
 
 You can use local/custom MCP servers from this repo by default, and you can also wire in third-party MCP servers by editing each agent's `mcp.config.json`.
@@ -38,7 +38,7 @@ LLAMA_SERVER_BIN=/path/to/llama.cpp/build/bin/llama-server
 
 ### 2. Configure your agent
 
-Edit `agents/assistant/agent.env`:
+Edit the existing assitant `agents/assistant/agent.env` or create a new agent `agents/<name>/agent.env`:
 
 ```env
 AGENT_LLAMA_MODEL=/path/to/your/model.gguf
@@ -64,6 +64,9 @@ AGENT_LLAMA_FLAG_JINJA=true       # → --jinja
 
 This validates your config, starts `llama-server`, and launches `mcp-proxy`.
 
+If you prefer fully local, you can stop here and use the `llama-server` web UI directly at `http://127.0.0.1:8002`.
+Make sure to connect the correct MCP servers in the UI if you want tool access there.
+
 ### 5. Set up the Telegram bot
 
 ```bash
@@ -74,7 +77,7 @@ cp .env.example .env
 Fill in:
 - `TELEGRAM_BOT_TOKEN` — from [@BotFather](https://t.me/botfather)
 - `TELEGRAM_ALLOWED_USER_IDS` — your Telegram user ID(s), comma-separated
-- `IMAGE_SUPPORT_ENABLED` — set `true` if your model supports vision input
+- `IMAGE_SUPPORT_ENABLED` — set `true` if your model supports vision input (use the mmproj flag with the llama-server)
 
 ### 6. Start the bot
 
@@ -113,7 +116,7 @@ Each agent lives in `agents/<name>/` and requires three files:
 | `mcp.config.json` | MCP tool configuration |
 | `system.md` | System prompt |
 
-Required vars in `agent.env`: `AGENT_LLAMA_MODEL`, `AGENT_LLAMA_ALIAS`, `AGENT_MCP_LOCAL_TIMEZONE`
+Required vars in `agent.env`: `AGENT_LLAMA_MODEL`, `AGENT_LLAMA_ALIAS`
 
 ### One active agent at a time
 
