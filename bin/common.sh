@@ -34,6 +34,23 @@ load_llama_defaults() {
     fi
 }
 
+mcp_config_has_servers() {
+    local config_path="$1"
+
+    python3 - "$config_path" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text(encoding="utf-8"))
+servers = payload.get("mcpServers")
+if not isinstance(servers, dict):
+    raise SystemExit(2)
+raise SystemExit(0 if any(isinstance(name, str) and name for name in servers.keys()) else 1)
+PY
+}
+
 port_in_use() {
     local port="$1"
 

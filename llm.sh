@@ -81,7 +81,6 @@ load_agent() {
     local required=(
         AGENT_LLAMA_MODEL
         AGENT_LLAMA_ALIAS
-        AGENT_MCP_LOCAL_TIMEZONE
     )
 
     local missing=()

@@ -53,6 +53,7 @@ To switch to another agent, run:
 
 - `/start`
 - `/help`
+- `/system`
 - `/images`
 - `/whoami`
 - `/reset`

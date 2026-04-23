@@ -619,7 +619,7 @@ def _refresh_tools(force: bool = False) -> list[dict[str, Any]]:
             server_map[name] = server
 
     if not loaded:
-        raise RuntimeError("No tools loaded from enabled MCP servers")
+            logger.info("No MCP tools loaded from enabled MCP servers; continuing without tools")
 
     chat_tool_server_map = server_map
     chat_tools_cache = loaded
@@ -770,6 +770,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"llamagram bot online (agent={CONFIG.agent_name}).\n"
         "Commands:\n"
         "/help - show help\n"
+        "/system - show active system prompt\n"
         "/images - image support status\n"
         "/whoami - show Telegram IDs\n"
         "/reset - clear this chat history"
@@ -783,10 +784,18 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "Commands:\n"
         "/start - status\n"
         "/help - help\n"
+        "/system - show active system prompt\n"
         "/images - image support status\n"
         "/whoami - show IDs\n"
         "/reset - clear chat history"
     )
+
+
+async def system_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _reject_if_unauthorized(update):
+        return
+    if update.message:
+        await update.message.reply_text(SYSTEM_PROMPT)
 
 
 async def images_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -864,6 +873,7 @@ def main() -> None:
     app = Application.builder().token(CONFIG.telegram_bot_token).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("system", system_command))
     app.add_handler(CommandHandler("images", images_command))
     app.add_handler(CommandHandler("whoami", whoami_command))
     app.add_handler(CommandHandler("reset", reset_command))

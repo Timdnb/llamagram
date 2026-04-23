@@ -105,15 +105,30 @@ start_mcp() {
         return 0
     fi
 
+    if [ ! -f "$AGENT_RENDERED_MCP_CONFIG" ]; then
+        echo "rendered mcp config missing: $AGENT_RENDERED_MCP_CONFIG"
+        return 1
+    fi
+
+    if mcp_config_has_servers "$AGENT_RENDERED_MCP_CONFIG"; then
+        :
+    else
+        case $? in
+            1)
+                echo "no MCP servers configured for this agent; skipping mcp-proxy"
+                return 0
+                ;;
+            *)
+                echo "invalid MCP config: $AGENT_RENDERED_MCP_CONFIG"
+                return 1
+                ;;
+        esac
+    fi
+
     if port_in_use "$MCP_PROXY_PORT"; then
         echo "cannot start mcp-proxy: port $MCP_PROXY_PORT is already in use"
         port_listener_summary "$MCP_PROXY_PORT" || true
         echo "Stop the conflicting process, or change MCP_PROXY_PORT in infra/llama/defaults.env"
-        return 1
-    fi
-
-    if [ ! -f "$AGENT_RENDERED_MCP_CONFIG" ]; then
-        echo "rendered mcp config missing: $AGENT_RENDERED_MCP_CONFIG"
         return 1
     fi
 
