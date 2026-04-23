@@ -34,6 +34,38 @@ load_llama_defaults() {
     fi
 }
 
+port_in_use() {
+    local port="$1"
+
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltn 2>/dev/null | awk -v p=":$port" '$4 ~ (p "$") {found=1} END {exit found ? 0 : 1}'
+        return $?
+    fi
+
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+        return $?
+    fi
+
+    return 1
+}
+
+port_listener_summary() {
+    local port="$1"
+
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltnp 2>/dev/null | awk -v p=":$port" '$4 ~ (p "$") {print; found=1} END {if (!found) exit 1}'
+        return $?
+    fi
+
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null
+        return $?
+    fi
+
+    return 1
+}
+
 is_running() {
     local pid_file="$1"
     if [ -f "$pid_file" ]; then

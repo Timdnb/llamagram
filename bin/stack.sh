@@ -45,6 +45,13 @@ start_llama() {
         return 0
     fi
 
+    if port_in_use "$LLAMA_PORT"; then
+        echo "cannot start llama-server: port $LLAMA_PORT is already in use"
+        port_listener_summary "$LLAMA_PORT" || true
+        echo "Stop the conflicting process, or change LLAMA_PORT in infra/llama/defaults.env"
+        return 1
+    fi
+
     if [ ! -x "${LLAMA_SERVER_BIN:-}" ]; then
         echo "llama-server binary not found or not executable: ${LLAMA_SERVER_BIN:-unset}"
         return 1
@@ -96,6 +103,13 @@ start_mcp() {
     if is_running "$MCP_PROXY_PID"; then
         echo "mcp-proxy already running (pid=$(cat "$MCP_PROXY_PID"))"
         return 0
+    fi
+
+    if port_in_use "$MCP_PROXY_PORT"; then
+        echo "cannot start mcp-proxy: port $MCP_PROXY_PORT is already in use"
+        port_listener_summary "$MCP_PROXY_PORT" || true
+        echo "Stop the conflicting process, or change MCP_PROXY_PORT in infra/llama/defaults.env"
+        return 1
     fi
 
     if [ ! -f "$AGENT_RENDERED_MCP_CONFIG" ]; then
