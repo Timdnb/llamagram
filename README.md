@@ -1,105 +1,93 @@
-# llamagram
+# llamagram 🦙
 
-llamagram is a generic local-LLM + MCP + Telegram starter repo.
+**llamagram** is a starter repo for running a local LLM with MCP tools, chatting with it over Telegram. It is local-first by default: local model, local stack, and local/custom MCP servers in this repo. You can still plug in third-party MCP servers when needed.
 
-It is designed for one clear workflow:
+## How it works
 
-1. Create an agent profile (`agents/<agent>`)
-2. Run a local OpenAI-compatible `llama-server` with a GGUF model
-3. Expose MCP tools through `mcp-proxy`
-4. Chat with that setup from Telegram
+1. Define an **agent** (model path, system prompt, MCP tools)
+2. Run a local **llama-server** with your GGUF model
+3. Expose tools via **mcp-proxy** (local/custom MCP servers by default)
+4. Chat through a **Telegram bot** that bridges it all together
 
-## Repo Layout
+---
 
-- `agents/` one folder per agent (`agent.env`, `mcp.config.json`, `system.md`)
-- `mcps/` custom MCP servers (example: `time`)
-- `telegram-bot/` Telegram bridge process for text and image chat
-- `bin/` shared shell helpers used by `llm.sh`
-- `infra/llama/defaults.env` stack defaults (ports, llama binary path)
-- `.state/` runtime-generated files, logs, and PID files (created at runtime)
+## Getting Started
 
-## Prerequisites
+### Included example agents
 
-- Linux/macOS shell
-- `llama-server` binary available locally
+- `assistant`: general starter profile
+- `beepboop`: playful assistant, no MCP tools
+- `timekeeper`: always responds with current time, uses the local `time` MCP server
+
+You can use local/custom MCP servers from this repo by default, and you can also wire in third-party MCP servers by editing each agent's `mcp.config.json`.
+
+### Prerequisites
+
+- Linux or macOS
+- `llama-server` binary ([llama.cpp](https://github.com/ggml-org/llama.cpp))
 - `uv` and `uvx`
 - Python 3.10+
 
-## Quick Start
-
-### 1. Set your llama-server binary path
+### 1. Point to your llama-server binary
 
 Edit `infra/llama/defaults.env`:
 
-```bash
+```env
 LLAMA_SERVER_BIN=/path/to/llama.cpp/build/bin/llama-server
 ```
 
-Replace `/path/to/llama.cpp/build/bin/llama-server` with the actual path to your llama-server binary.
+### 2. Configure your agent
 
-### 2. Configure your agent model
-
-Edit `agents/assistant/agent.env` and set your model path:
+Edit `agents/assistant/agent.env`:
 
 ```env
 AGENT_LLAMA_MODEL=/path/to/your/model.gguf
 AGENT_LLAMA_ALIAS=your/model-name
 ```
 
-### 3. (Optional) Add llama-server flags
+### 3. Add llama-server flags (optional)
 
-In `agents/assistant/agent.env`, add any additional flags using `AGENT_LLAMA_FLAG_*`:
+Any `AGENT_LLAMA_FLAG_*` var gets passed as a flag to `llama-server`:
 
 ```env
-# becomes: --ctx-size 32768
-AGENT_LLAMA_FLAG_CTX_SIZE=32768
-
-# becomes: --jinja
-AGENT_LLAMA_FLAG_JINJA=true
+AGENT_LLAMA_FLAG_CTX_SIZE=32768   # → --ctx-size 32768
+AGENT_LLAMA_FLAG_JINJA=true       # → --jinja
 ```
 
-Mapping rule: `AGENT_LLAMA_FLAG_<UPPER_SNAKE_CASE>` → `--lower-kebab-case`.
+> `--model`, `--alias`, and `--port` are managed by the stack — don't set these.
 
-**Note:** `--model`, `--alias`, and `--port` are managed by the stack; do not override them via flags.
-
-### 4. Start the LLM + MCP stack
+### 4. Start the stack 🚀
 
 ```bash
 ./llm.sh start assistant
 ```
 
-This will:
-- Validate agent configuration
-- Start `llama-server` with your model
-- Start `mcp-proxy` with any enabled MCP tools
-- Create `.state/active-agent` (read by Telegram bot)
+This validates your config, starts `llama-server`, and launches `mcp-proxy`.
 
-### 5. Configure Telegram bot
+### 5. Set up the Telegram bot
 
 ```bash
 cd telegram-bot
 cp .env.example .env
 ```
 
-Edit `.env` to set:
+Fill in:
+- `TELEGRAM_BOT_TOKEN` — from [@BotFather](https://t.me/botfather)
+- `TELEGRAM_ALLOWED_USER_IDS` — your Telegram user ID(s), comma-separated
+- `IMAGE_SUPPORT_ENABLED` — set `true` if your model supports vision input
 
-- `TELEGRAM_BOT_TOKEN` - Get from [@BotFather](https://t.me/botfather)
-- `TELEGRAM_ALLOWED_USER_IDS` - Your Telegram user ID(s) (comma-separated)
-- `IMAGE_SUPPORT_ENABLED` - `true` if your model supports image input (use mmproj with llama-server)
-
-### 6. Start the Telegram bot
+### 6. Start the bot
 
 ```bash
 cd telegram-bot
 ./start.sh
 ```
 
-The bot will:
-- Auto-discover the running llama-server model
-- Read the active agent from `.state/active-agent`
-- Listen for Telegram messages and bridge them to your local stack
+The bot auto-discovers the running model and active agent, and starts relaying your Telegram messages.
 
-## Controller Commands
+---
+
+## Controller commands
 
 ```bash
 ./llm.sh list-agents
@@ -111,37 +99,37 @@ The bot will:
 ./llm.sh logs mcp
 ```
 
-## Single Active Agent Model
+---
 
-llamagram currently runs one active agent stack at a time.
+## Reference
 
-- `./llm.sh start <agent>` makes that agent active and starts `llama-server` + `mcp-proxy`.
-- The Telegram bot always serves the active agent from `.state/active-agent`.
-- Starting a different agent while services are already running is blocked by a guardrail.
-- To switch agents, use `./llm.sh restart <agent>` (or `stop` then `start`).
+### Agent contract
 
-## Agent Contract
+Each agent lives in `agents/<name>/` and requires three files:
 
-Each agent directory must contain:
+| File | Purpose |
+|---|---|
+| `agent.env` | Model path, alias, llama flags |
+| `mcp.config.json` | MCP tool configuration |
+| `system.md` | System prompt |
 
-- `agent.env`
-- `mcp.config.json`
-- `system.md`
+Required vars in `agent.env`: `AGENT_LLAMA_MODEL`, `AGENT_LLAMA_ALIAS`, `AGENT_MCP_LOCAL_TIMEZONE`
 
-Required env vars in `agent.env`:
+### One active agent at a time
 
-- `AGENT_LLAMA_MODEL`
-- `AGENT_LLAMA_ALIAS`
-- `AGENT_MCP_LOCAL_TIMEZONE`
+llamagram runs a single agent stack at a time. Starting a second agent while one is running is blocked — use `restart` to switch. The active agent is tracked in `.state/active-agent`.
 
-Optional llama flags in `agent.env`:
+### Repo layout
 
-- `AGENT_LLAMA_FLAG_*` (dynamic mapping to `llama-server` flags)
+```
+agents/          one folder per agent
+mcps/            custom MCP servers (includes a `time` example)
+telegram-bot/    Telegram bridge
+bin/             shared shell helpers
+infra/llama/     stack defaults
+.state/          runtime files, logs, PIDs (generated at runtime)
+```
 
-Notes:
+## License
 
-- `--model`, `--alias`, and `--port` are managed by the stack and should not be set via `AGENT_LLAMA_FLAG_*`.
-
-## MCP Example
-
-The included `time` MCP server is a placeholder example and a smoke test target for new setups.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
