@@ -7,7 +7,7 @@
         "--with",
         "mcp",
         "python",
-        "${ROOT_DIR}/mcps/servers/time/server.py",
+        "${ROOT_DIR}/mcps/time/server.py",
         "--local-timezone=${AGENT_MCP_LOCAL_TIMEZONE}"
       ]
     }
