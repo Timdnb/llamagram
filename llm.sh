@@ -11,7 +11,7 @@ source "$ROOT_DIR/bin/stack.sh"
 
 usage() {
     cat <<EOF
-Llamagram Stack Controller
+llamagram Stack Controller
 
 Usage:
   ./llm.sh list-agents
