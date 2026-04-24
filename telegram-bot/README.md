@@ -5,7 +5,7 @@ This process connects Telegram to your local OpenAI-compatible `llama-server` an
 Important behavior:
 
 - The bot uses the currently active agent from `../.state/active-agent` (written by `./llm.sh start <agent>`).
-- On every request to `/v1/chat/completions`, the bot prepends `agents/<active-agent>/system.md` as the first `system` message.
+- On every request to `/v1/chat/completions`, the bot prepends `agents/<active-agent>/system.md` as the first `system` message and auto-reloads it when the file changes.
 - MCP tools are loaded from the active rendered MCP config path in `../.state/active-mcp-config`.
 - Only one active agent is supported at a time.
 - llama-server and mcp-proxy ports are read from `../infra/llama/defaults.env`.

@@ -184,7 +184,14 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 SYSTEM_PROMPT_PATH = BASE_DIR / "agents" / CONFIG.agent_name / "system.md"
 if not SYSTEM_PROMPT_PATH.exists():
     raise RuntimeError(f"Agent system prompt not found: {SYSTEM_PROMPT_PATH}")
-SYSTEM_PROMPT = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip()
+
+
+def _read_system_prompt() -> str:
+    return SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip()
+
+
+SYSTEM_PROMPT = _read_system_prompt()
+SYSTEM_PROMPT_MTIME_NS = SYSTEM_PROMPT_PATH.stat().st_mtime_ns
 
 LOG_DIR = Path(os.getenv("LOG_DIR", "./logs")).resolve()
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -455,7 +462,6 @@ async def _process_user_message(update: Update, text: str, images: list[dict[str
             message_history=history,
         )
     except Exception as exc:
-        logger.exception("chat loop failed")
         await update.message.reply_text(f"Error: {exc}")
         return
 
@@ -501,9 +507,31 @@ async def _process_pending_media_group(update: Update, context: ContextTypes.DEF
     await _process_user_message(update, text=caption, images=images)
 
 
+def _get_system_prompt() -> str:
+    global SYSTEM_PROMPT, SYSTEM_PROMPT_MTIME_NS
+
+    try:
+        current_mtime_ns = SYSTEM_PROMPT_PATH.stat().st_mtime_ns
+    except OSError as exc:
+        logger.warning("Could not stat system prompt file %s: %s", SYSTEM_PROMPT_PATH, exc)
+        return SYSTEM_PROMPT
+
+    if current_mtime_ns == SYSTEM_PROMPT_MTIME_NS:
+        return SYSTEM_PROMPT
+
+    try:
+        SYSTEM_PROMPT = _read_system_prompt()
+        SYSTEM_PROMPT_MTIME_NS = current_mtime_ns
+        logger.info("Reloaded system prompt from %s", SYSTEM_PROMPT_PATH)
+    except OSError as exc:
+        logger.warning("Could not reload system prompt file %s: %s", SYSTEM_PROMPT_PATH, exc)
+
+    return SYSTEM_PROMPT
+
+
 def _with_system_prompt(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     # Inject system prompt as first message on every request.
-    return [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
+    return [{"role": "system", "content": _get_system_prompt()}, *messages]
 
 
 def _mcp_rpc(server_name: str, method: str, params: dict[str, Any], request_id: str, timeout: int = 30) -> dict[str, Any]:
@@ -795,7 +823,7 @@ async def system_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if await _reject_if_unauthorized(update):
         return
     if update.message:
-        await update.message.reply_text(SYSTEM_PROMPT)
+        await update.message.reply_text(_get_system_prompt())
 
 
 async def images_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
