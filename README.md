@@ -126,7 +126,7 @@ llamagram runs a single agent stack at a time. Starting a second agent while one
 
 ```
 agents/          one folder per agent
-mcps/            custom MCP servers (includes a `time` example)
+mcps/            custom MCP servers (includes `time` and `markdown` examples)
 telegram-bot/    Telegram bridge
 bin/             shared shell helpers
 infra/llama/     stack defaults
