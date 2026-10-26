@@ -1,59 +1,51 @@
-# Telegram Bot
+# Telegram bot
 
-This process connects Telegram to your local OpenAI-compatible `llama-server` and MCP tool stack.
-
-Important behavior:
-
-- The bot uses the currently active agent from `../.state/active-agent` (written by `./llm.sh start <agent>`).
-- On every request to `/v1/chat/completions`, the bot prepends `agents/<active-agent>/system.md` as the first `system` message and auto-reloads it when the file changes.
-- MCP tools are loaded from the active rendered MCP config path in `../.state/active-mcp-config`.
-- Only one active agent is supported at a time.
-- llama-server and mcp-proxy ports are read from `../infra/llama/defaults.env`.
-- Model alias is discovered from the running llama-server via `/v1/models`.
-- Photo messages and image documents can be forwarded to a vision-capable model when `IMAGE_SUPPORT_ENABLED=true`.
-- Conversation history is isolated per Telegram `chat_id`.
-- Logs include redacted audit metadata (message type, char count, image count, chat_id, user_id).
+Connects Telegram to the active llama-server model and MCP tools.
 
 ## Setup
 
-1. Copy env file:
+From `telegram-bot/`:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Edit `.env`:
+Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USER_IDS`. Optionally restrict
+`TELEGRAM_ALLOWED_CHAT_IDS`. Enable `IMAGE_SUPPORT_ENABLED` only when the selected
+model has a vision projector configured.
 
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_ALLOWED_USER_IDS`
-- `IMAGE_SUPPORT_ENABLED=true` if the selected model can read images
-- `MAX_IMAGE_BYTES` and `MAX_IMAGES_PER_MESSAGE` to tune attachment limits
-
-3. Start local stack from repo root:
+Start the stack from the repository root:
 
 ```bash
 ./llm.sh start assistant
 ```
 
-The bot expects this step to be done first so `../.state/active-agent` and `../.state/active-mcp-config` exist.
-
-To switch to another agent, run:
+Wait for the model to load (`./llm.sh logs llama`), then:
 
 ```bash
-./llm.sh restart <agent>
-```
-
-4. Run the bot:
-
-```bash
+cd telegram-bot
 ./start.sh
 ```
 
-## Commands
+Stop the bot with Ctrl+C before changing agents, models, or MCP configuration,
+then start it again afterward. Edits to the active `system.md` apply immediately.
+The system prompt is injected by this bot; it does not configure the server's web UI.
 
-- `/start`
-- `/help`
-- `/system`
-- `/images`
-- `/whoami`
-- `/reset`
+## Behavior
+
+- `/start`, `/help`, `/system`, `/images`, `/whoami`, `/reset`.
+- History is per chat, held in memory, and cleared on restart or `/reset`.
+- History trimming preserves complete tool turns; the latest turn is always kept.
+- Different chats can run concurrently; each chat keeps its messages in order.
+- Tools load at startup and include their server name, e.g. `time__get_current_time`.
+- Replies support basic Markdown; long replies are split into plain text.
+- Logs redact the Telegram token and record metadata without message contents.
+
+## Code and checks
+
+`bot.py` handles Telegram and chat state; `config.py` loads settings; `chat.py`
+handles model/MCP requests; `formatting.py` formats replies.
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+```
