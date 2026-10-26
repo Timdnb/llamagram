@@ -9,3 +9,6 @@ __pycache__/
 telegram-bot/.venv/
 telegram-bot/logs/
 TODO.md
+agents/coder/
+agents/personal-trainer/
+agents/tester/

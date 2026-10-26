@@ -5,14 +5,14 @@ set -euo pipefail
 # shellcheck disable=SC1091
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
-append_llama_agent_flags() {
+append_llama_flags() {
     local -n _cmd_ref="$1"
     local name value suffix flag
 
     while IFS='=' read -r name value; do
         case "$name" in
-            AGENT_LLAMA_FLAG_*)
-                suffix="${name#AGENT_LLAMA_FLAG_}"
+            LLAMA_FLAG_*)
+                suffix="${name#LLAMA_FLAG_}"
                 flag="$(printf '%s' "$suffix" | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
 
                 # Core startup flags are controlled by dedicated required keys.
@@ -25,10 +25,10 @@ append_llama_agent_flags() {
                 fi
 
                 case "$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')" in
-                    true|1|yes|on)
+                    true)
                         _cmd_ref+=(--"$flag")
                         ;;
-                    false|0|no|off)
+                    false)
                         ;;
                     *)
                         _cmd_ref+=(--"$flag" "$value")
@@ -52,7 +52,7 @@ start_llama() {
         return 1
     fi
 
-    if [ ! -x "${LLAMA_SERVER_BIN:-}" ]; then
+    if ! command -v "${LLAMA_SERVER_BIN:-}" >/dev/null 2>&1; then
         echo "llama-server binary not found or not executable: ${LLAMA_SERVER_BIN:-unset}"
         return 1
     fi
@@ -64,7 +64,7 @@ start_llama() {
         --port "$LLAMA_PORT"
     )
 
-    append_llama_agent_flags cmd
+    append_llama_flags cmd
 
     nohup "${cmd[@]}" > "$LOG_DIR/llama.log" 2>&1 &
     local pid=$!
@@ -186,6 +186,10 @@ show_status() {
         echo "active-agent: $(cat "$ACTIVE_AGENT_FILE")"
     else
         echo "active-agent: none"
+    fi
+
+    if [ -f "$ACTIVE_MODEL_FILE" ]; then
+        echo "model: $(cat "$ACTIVE_MODEL_FILE")"
     fi
 
     if [ -f "$ACTIVE_MCP_CONFIG_FILE" ]; then

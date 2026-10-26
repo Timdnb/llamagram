@@ -9,6 +9,7 @@ LOG_DIR="$STATE_DIR/logs"
 GENERATED_DIR="$STATE_DIR/generated"
 AGENTS_DIR="$ROOT_DIR/agents"
 ACTIVE_AGENT_FILE="$STATE_DIR/active-agent"
+ACTIVE_MODEL_FILE="$STATE_DIR/active-model"
 ACTIVE_MCP_CONFIG_FILE="$STATE_DIR/active-mcp-config"
 
 LLAMA_PID="$PID_DIR/llama.pid"
@@ -99,22 +100,41 @@ list_agents() {
     find "$AGENTS_DIR" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort
 }
 
+list_models() {
+    find "$ROOT_DIR/models" -maxdepth 1 -name '*.env' -printf '%f\n' | sed 's/\.env$//' | sort
+}
+
 write_active_agent() {
     local agent="$1"
     echo "$agent" > "$ACTIVE_AGENT_FILE"
+    echo "$MODEL_NAME" > "$ACTIVE_MODEL_FILE"
     echo "$AGENT_RENDERED_MCP_CONFIG" > "$ACTIVE_MCP_CONFIG_FILE"
 }
 
 render_mcp_config() {
     AGENT_RENDERED_MCP_CONFIG="$GENERATED_DIR/${AGENT_NAME}-mcp.config.json"
 
-    perl -pe 's/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/exists $ENV{$1} ? $ENV{$1} : $&/ge' \
-        "$AGENT_MCP_CONFIG" > "$AGENT_RENDERED_MCP_CONFIG"
+    python3 - "$AGENT_MCP_CONFIG" "$AGENT_RENDERED_MCP_CONFIG" <<'PY'
+import json
+import os
+import re
+import sys
+from pathlib import Path
 
-    if grep -Eq '\$\{[A-Za-z_][A-Za-z0-9_]*\}' "$AGENT_RENDERED_MCP_CONFIG"; then
-        echo "Unresolved placeholders in: $AGENT_RENDERED_MCP_CONFIG"
-        return 1
-    fi
+def expand(value):
+    if isinstance(value, str):
+        return re.sub(r"\$\{(\w+)\}", lambda match: os.environ[match[1]], value)
+    if isinstance(value, list):
+        return [expand(item) for item in value]
+    if isinstance(value, dict):
+        return {key: expand(item) for key, item in value.items()}
+    return value
+
+config = expand(json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")))
+if not isinstance(config["mcpServers"], dict):
+    raise ValueError("mcpServers must be an object")
+Path(sys.argv[2]).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+PY
 
     export AGENT_RENDERED_MCP_CONFIG
 }

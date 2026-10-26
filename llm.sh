@@ -15,98 +15,81 @@ llamagram Stack Controller
 
 Usage:
   ./llm.sh list-agents
-  ./llm.sh start <agent>
+  ./llm.sh list-models
+  ./llm.sh start <agent> [model]
   ./llm.sh stop
-  ./llm.sh restart <agent>
+  ./llm.sh restart <agent> [model]
   ./llm.sh status
   ./llm.sh logs <llama|mcp>
 EOF
 }
 
 guard_single_active_start() {
-    local requested_agent="$1"
-
-    local llama_running="false"
-    local mcp_running="false"
-    if is_running "$LLAMA_PID"; then llama_running="true"; fi
-    if is_running "$MCP_PROXY_PID"; then mcp_running="true"; fi
-
-    if [ "$llama_running" = "false" ] && [ "$mcp_running" = "false" ]; then
+    if ! is_running "$LLAMA_PID" && ! is_running "$MCP_PROXY_PID"; then
         return 0
     fi
 
-    if [ ! -f "$ACTIVE_AGENT_FILE" ]; then
-        echo "Stack services are running but active agent is unknown. Stop the stack first with ./llm.sh stop"
+    local current_agent="unknown"
+    local current_model="unknown"
+    if [ -f "$ACTIVE_AGENT_FILE" ]; then current_agent="$(cat "$ACTIVE_AGENT_FILE")"; fi
+    if [ -f "$ACTIVE_MODEL_FILE" ]; then current_model="$(cat "$ACTIVE_MODEL_FILE")"; fi
+    if [ "$current_agent" != "$AGENT_NAME" ] || [ "$current_model" != "$MODEL_NAME" ]; then
+        echo "Stack already running: agent=$current_agent model=$current_model"
+        echo "Use './llm.sh restart $AGENT_NAME $MODEL_NAME' to switch."
         return 1
     fi
-
-    local current_agent
-    current_agent="$(cat "$ACTIVE_AGENT_FILE")"
-    if [ "$current_agent" != "$requested_agent" ]; then
-        echo "Single active agent guard: stack is already running for '$current_agent'."
-        echo "Use './llm.sh restart $requested_agent' or './llm.sh stop' first."
-        return 1
-    fi
-
-    return 0
 }
 
 load_agent() {
-    local agent="$1"
-    local agent_dir="$ROOT_DIR/agents/$agent"
+    AGENT_NAME="$1"
+    if [[ ! "$AGENT_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        echo "Invalid agent name: $AGENT_NAME"
+        return 1
+    fi
+    AGENT_DIR="$ROOT_DIR/agents/$AGENT_NAME"
+    AGENT_MCP_CONFIG="$AGENT_DIR/mcp.config.json"
 
-    if [ ! -d "$agent_dir" ]; then
-        echo "Agent not found: $agent"
-        return 1
-    fi
-
-    if [ ! -f "$agent_dir/agent.env" ]; then
-        echo "Missing agent.env for $agent"
-        return 1
-    fi
-    if [ ! -f "$agent_dir/mcp.config.json" ]; then
-        echo "Missing mcp.config.json for $agent"
-        return 1
-    fi
-    if [ ! -f "$agent_dir/system.md" ]; then
-        echo "Missing system.md for $agent"
-        return 1
-    fi
+    local file
+    for file in agent.env mcp.config.json system.md; do
+        if [ ! -f "$AGENT_DIR/$file" ]; then
+            echo "Missing agent file: $AGENT_DIR/$file"
+            return 1
+        fi
+    done
 
     set -a
     # shellcheck disable=SC1090
-    source "$agent_dir/agent.env"
+    source "$AGENT_DIR/agent.env"
     set +a
-
-    local required=(
-        AGENT_LLAMA_MODEL
-        AGENT_LLAMA_ALIAS
-    )
-
-    local missing=()
-    local key
-    for key in "${required[@]}"; do
-        if [ -z "${!key:-}" ]; then
-            missing+=("$key")
-        fi
-    done
-    if [ "${#missing[@]}" -gt 0 ]; then
-        echo "Missing required keys in $agent_dir/agent.env: ${missing[*]}"
+    MODEL_NAME="${2:-${AGENT_MODEL:-}}"
+    if [[ ! "$MODEL_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        echo "Set AGENT_MODEL in agent.env, or pass a model name."
+        return 1
+    fi
+    local model_config="$ROOT_DIR/models/$MODEL_NAME.env"
+    if [ ! -f "$model_config" ]; then
+        echo "Unknown model: $MODEL_NAME (see ./llm.sh list-models)"
         return 1
     fi
 
-    AGENT_NAME="$agent"
-    AGENT_DIR="$agent_dir"
-    AGENT_MCP_CONFIG="$agent_dir/mcp.config.json"
-
-    LLAMA_MODEL="$AGENT_LLAMA_MODEL"
-    LLAMA_ALIAS="$AGENT_LLAMA_ALIAS"
-    export ROOT_DIR
-    export AGENT_NAME
-    export AGENT_MCP_LOCAL_TIMEZONE
-
+    # Model settings come exclusively from the selected model file.
+    local key
+    for key in "${!LLAMA_FLAG_@}"; do
+        unset "$key"
+    done
+    LLAMA_MODEL=""
+    set -a
+    # shellcheck disable=SC1090
+    source "$model_config"
+    set +a
+    if [ ! -f "$LLAMA_MODEL" ]; then
+        echo "Model file not found: $LLAMA_MODEL"
+        echo "Check the selected model and LLAMA_MODELS_DIR in .env."
+        return 1
+    fi
+    LLAMA_ALIAS="$AGENT_NAME"
+    export ROOT_DIR AGENT_DIR AGENT_NAME
     render_mcp_config
-    write_active_agent "$agent"
 }
 
 ensure_runtime_dirs
@@ -115,20 +98,25 @@ load_llama_defaults
 
 cmd="${1:-help}"
 arg="${2:-}"
+model="${3:-}"
 
 case "$cmd" in
     list-agents)
         list_agents
+        ;;
+    list-models)
+        list_models
         ;;
     start)
         if [ -z "$arg" ]; then
             usage
             exit 1
         fi
-        guard_single_active_start "$arg"
-        load_agent "$arg"
+        load_agent "$arg" "$model"
+        guard_single_active_start
         start_llama
         start_mcp
+        write_active_agent "$arg"
         ;;
     stop)
         stop_mcp
@@ -139,11 +127,13 @@ case "$cmd" in
             usage
             exit 1
         fi
-        stop_mcp || true
-        stop_llama || true
-        load_agent "$arg"
+        # Validate the requested configuration before stopping a working stack.
+        load_agent "$arg" "$model"
+        stop_mcp
+        stop_llama
         start_llama
         start_mcp
+        write_active_agent "$arg"
         ;;
     status)
         show_status
