@@ -179,6 +179,19 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(json.JSONDecodeError):
             await client.mcp.call("time__health", "invalid")
 
+    async def test_vision_support_tracks_live_server_capabilities(self):
+        responses = iter([{"modalities": {"vision": True}},
+                          {"modalities": {"vision": False}}, {}])
+
+        def handler(request):
+            self.assertEqual(request.url.path, "/props")
+            return httpx.Response(200, json=next(responses))
+
+        client = self.client(handler)
+        self.assertTrue(await client.supports_images())
+        self.assertFalse(await client.supports_images())
+        self.assertFalse(await client.supports_images())
+
     def test_history_keeps_whole_tool_turns(self):
         messages = [{"role": role} for role in (
             "user", "assistant", "user", "assistant", "tool", "assistant", "user", "assistant",
@@ -188,6 +201,63 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
 
 
 class TelegramTests(unittest.IsolatedAsyncioTestCase):
+    def image_update(self):
+        message = SimpleNamespace(reply_text=AsyncMock(), chat_id=10,
+                                  media_group_id=None, caption="caption", text="/images")
+        return SimpleNamespace(effective_user=SimpleNamespace(id=1),
+                               effective_chat=SimpleNamespace(id=10), message=message)
+
+    async def test_images_command_reports_live_model_support(self):
+        chat = SimpleNamespace(supports_images=AsyncMock(return_value=False))
+        bot = TelegramBot(config(Path("unused"), image_support_enabled=True), chat)
+        update = self.image_update()
+        await bot.command(update, SimpleNamespace())
+        self.assertIn("disabled", update.message.reply_text.await_args.args[0])
+        self.assertIn("model", update.message.reply_text.await_args.args[0])
+        chat.supports_images.return_value = True
+        await bot.command(update, SimpleNamespace())
+        self.assertEqual(update.message.reply_text.await_args.args[0], "Image support: enabled.")
+
+    async def test_nonvision_images_are_rejected_before_download_and_inference(self):
+        chat = SimpleNamespace(supports_images=AsyncMock(return_value=False), complete=AsyncMock())
+        bot = TelegramBot(config(Path("unused"), image_support_enabled=True), chat)
+        bot.download_image = AsyncMock()
+        update = self.image_update()
+        await bot.image_message(update, SimpleNamespace())
+        bot.download_image.assert_not_awaited()
+        chat.complete.assert_not_awaited()
+        self.assertIn("no vision support", update.message.reply_text.await_args.args[0])
+        self.assertFalse(bot.chats)
+
+    async def test_bot_setting_can_disable_images_for_a_vision_model(self):
+        chat = SimpleNamespace(supports_images=AsyncMock(return_value=True))
+        bot = TelegramBot(config(Path("unused")), chat)
+        bot.download_image = AsyncMock()
+        update = self.image_update()
+        await bot.command(update, SimpleNamespace())
+        self.assertIn("disabled in bot settings", update.message.reply_text.await_args.args[0])
+        await bot.image_message(update, SimpleNamespace())
+        bot.download_image.assert_not_awaited()
+        chat.supports_images.assert_not_awaited()
+
+    async def test_unreachable_server_does_not_allow_image_processing(self):
+        chat = SimpleNamespace(supports_images=AsyncMock(side_effect=httpx.ConnectError("offline")))
+        bot = TelegramBot(config(Path("unused"), image_support_enabled=True), chat)
+        bot.download_image = AsyncMock()
+        update = self.image_update()
+        await bot.image_message(update, SimpleNamespace())
+        bot.download_image.assert_not_awaited()
+        self.assertIn("unavailable", update.message.reply_text.await_args.args[0])
+
+    async def test_vision_model_accepts_images_when_bot_setting_allows_them(self):
+        chat = SimpleNamespace(supports_images=AsyncMock(return_value=True))
+        bot = TelegramBot(config(Path("unused"), image_support_enabled=True), chat)
+        bot.download_image = AsyncMock(return_value="data:image/jpeg;base64,abc")
+        bot.respond = AsyncMock()
+        update = self.image_update()
+        await bot.image_message(update, SimpleNamespace())
+        bot.respond.assert_awaited_once_with(update.message, "caption", ["data:image/jpeg;base64,abc"])
+
     async def test_unauthorized_images_are_not_downloaded(self):
         bot = TelegramBot(config(Path("unused"), image_support_enabled=True), SimpleNamespace())
         message = SimpleNamespace(reply_text=AsyncMock(), chat_id=10)

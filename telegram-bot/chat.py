@@ -108,6 +108,11 @@ class ChatClient:
         self.model = response.json()["data"][0]["id"]
         await self.mcp.load_tools(self.config.mcp_servers)
 
+    async def supports_images(self) -> bool:
+        response = await self.http.get(f"{self.config.llama_url}/props", timeout=10)
+        response.raise_for_status()
+        return response.json().get("modalities", {}).get("vision") is True
+
     async def complete(self, history: list[Message]) -> str:
         for _ in range(self.config.max_tool_steps):
             # Reading on each call keeps prompt edits live without a cache or globals.

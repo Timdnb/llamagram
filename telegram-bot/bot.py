@@ -32,7 +32,6 @@ HELP = (
     "/whoami - show Telegram IDs\n"
     "/reset - clear this chat history"
 )
-IMAGE_DISABLED = "Image support is disabled. Set IMAGE_SUPPORT_ENABLED=true and restart the bot."
 ALBUM_WAIT_SECONDS = 2
 
 
@@ -92,6 +91,18 @@ class TelegramBot:
             await reply(message, "This bot is allowlisted. Access denied.")
         return allowed
 
+    async def image_support_status(self) -> tuple[bool, str]:
+        if not self.config.image_support_enabled:
+            return False, "Image support: disabled in bot settings (IMAGE_SUPPORT_ENABLED=false)."
+        try:
+            supported = await self.chat.supports_images()
+        except httpx.HTTPError as exc:
+            logger.warning("Could not check model vision support: %s", exc)
+            return False, "Image support: unavailable (could not check the running model)."
+        if not supported:
+            return False, "Image support: disabled (the running model has no vision support)."
+        return True, "Image support: enabled."
+
     async def command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         message = update.message
         if message is None:
@@ -111,7 +122,7 @@ class TelegramBot:
         elif command == "/system":
             text = self.config.system_prompt_path.read_text(encoding="utf-8")
         elif command == "/images":
-            text = "Image support: " + ("enabled" if self.config.image_support_enabled else "disabled")
+            _, text = await self.image_support_status()
         elif command == "/start":
             text = f"llamagram bot online (agent={self.config.agent_name}).\n{HELP}"
         else:
@@ -143,9 +154,6 @@ class TelegramBot:
         if not await self.authorized(update):
             return
         message = update.message
-        if not self.config.image_support_enabled:
-            await reply(message, IMAGE_DISABLED)
-            return
         if message.media_group_id:
             key = (message.chat_id, message.media_group_id)
             if key not in self.albums:
@@ -161,6 +169,10 @@ class TelegramBot:
         await self.process_images(self.albums.pop(key))
 
     async def process_images(self, messages: list[Message]) -> None:
+        enabled, status = await self.image_support_status()
+        if not enabled:
+            await reply(messages[0], status)
+            return
         if len(messages) > self.config.max_images_per_message:
             raise ValueError(f"Maximum {self.config.max_images_per_message} images per message")
         images = [await self.download_image(message) for message in messages]

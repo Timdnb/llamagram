@@ -11,8 +11,8 @@ cp .env.example .env
 ```
 
 Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USER_IDS`. Optionally restrict
-`TELEGRAM_ALLOWED_CHAT_IDS`. Enable `IMAGE_SUPPORT_ENABLED` only when the selected
-model has a vision projector configured.
+`TELEGRAM_ALLOWED_CHAT_IDS`. Set `IMAGE_SUPPORT_ENABLED=true` to allow images;
+the bot also checks that the running server reports vision support.
 
 Start the stack from the repository root:
 
@@ -34,6 +34,7 @@ The system prompt is injected by this bot; it does not configure the server's we
 ## Behavior
 
 - `/start`, `/help`, `/system`, `/images`, `/whoami`, `/reset`.
+- `/images` checks the running model. Unsupported images are rejected before download.
 - History is per chat, held in memory, and cleared on restart or `/reset`.
 - History trimming preserves complete tool turns; the latest turn is always kept.
 - Different chats can run concurrently; each chat keeps its messages in order.
