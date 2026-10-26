@@ -7,6 +7,7 @@ One agent stack runs at a time.
 
 Requires Linux, Bash 4.3+, Python 3.11+, `uv`/`uvx`, and a built
 [llama-server](https://github.com/ggml-org/llama.cpp).
+Qwen3.8 needs an MTP-aware runtime; these profiles are verified with build b11669.
 
 ```bash
 cp .env.example .env
