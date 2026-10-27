@@ -8,9 +8,9 @@ One agent stack runs at a time.
 Give your coding agent the [setup skill](.agents/skills/llamagram-setup/SKILL.md)
 and ask:
 
-> Use llamagram-setup to prepare a local notes-helper agent. Check my hardware,
-> choose a suitable Unsloth model, give it access to one Markdown notes file,
-> and show me how to launch it.
+> I want an agent that helps me organize my ideas and keeps notes so we can
+> pick up where we left off. It should give concise answers and ask questions
+> when something is unclear.
 
 The skill covers installation, hardware-based model selection, MCP capabilities,
 and configuration with launch instructions. In a checkout, Codex discovers it as
