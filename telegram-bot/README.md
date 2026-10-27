@@ -48,5 +48,8 @@ The system prompt is injected by this bot; it does not configure the server's we
 handles model/MCP requests; `formatting.py` formats replies.
 
 ```bash
-.venv/bin/python -m unittest discover -s tests -v
+pixi run test-bot
 ```
+
+Dependencies are managed in the root `pixi.toml`. `./start.sh` runs the bot in
+that environment; `pixi run bot` from the repository root does the same.

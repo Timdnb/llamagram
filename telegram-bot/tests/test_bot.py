@@ -36,7 +36,10 @@ def config(prompt: Path, **changes) -> BotConfig:
 
 class ConfigTests(unittest.TestCase):
     def test_loads_active_agent_and_honors_port_override(self):
-        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {}, clear=True),
+        ):
             root = Path(directory)
             for folder in ("telegram-bot", "infra/llama", ".state", "agents/test"):
                 (root / folder).mkdir(parents=True)
@@ -66,10 +69,12 @@ class FormattingTests(unittest.IsolatedAsyncioTestCase):
         )
 
     def test_headings_emphasis_and_code_are_escaped(self):
-        self.assertEqual(telegram_html("# <Title>\n**bold** and _italic_"),
-                         "<b>&lt;Title&gt;</b>\n<b>bold</b> and <i>italic</i>")
+        self.assertEqual(
+            telegram_html("# <Title>\n**bold** and _italic_"),
+            "<b>&lt;Title&gt;</b>\n<b>bold</b> and <i>italic</i>",
+        )
         rendered = telegram_html('```python\nx = "<a>"\n```\nDone')
-        self.assertIn('<pre><code>x = &quot;&lt;a&gt;&quot;\n</code></pre>', rendered)
+        self.assertIn("<pre><code>x = &quot;&lt;a&gt;&quot;\n</code></pre>", rendered)
         self.assertTrue(rendered.endswith("Done"))
 
     def test_reasoning_only_and_unclosed_reasoning_are_hidden(self):
@@ -88,15 +93,21 @@ class FormattingTests(unittest.IsolatedAsyncioTestCase):
         await reply(message, text, markdown=True)
         chunks = [call.args[0] for call in message.reply_text.await_args_list]
         self.assertEqual("".join(chunks), text)
-        self.assertTrue(all(len(chunk.encode("utf-16-le")) // 2 < 4096 for chunk in chunks))
+        self.assertTrue(
+            all(len(chunk.encode("utf-16-le")) // 2 < 4096 for chunk in chunks)
+        )
 
     async def test_parse_error_falls_back_to_original_text(self):
-        message = SimpleNamespace(reply_text=AsyncMock(side_effect=[BadRequest("Can't parse entities"), None]))
+        message = SimpleNamespace(
+            reply_text=AsyncMock(side_effect=[BadRequest("Can't parse entities"), None])
+        )
         await reply(message, "**bold**", markdown=True)
         self.assertEqual(message.reply_text.await_args_list[-1].args[0], "**bold**")
 
     async def test_other_telegram_errors_propagate(self):
-        message = SimpleNamespace(reply_text=AsyncMock(side_effect=BadRequest("Chat not found")))
+        message = SimpleNamespace(
+            reply_text=AsyncMock(side_effect=BadRequest("Chat not found"))
+        )
         with self.assertRaises(BadRequest):
             await reply(message, "text", markdown=True)
 
@@ -119,7 +130,14 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
             if request.method == "GET":
                 return httpx.Response(200, json={"data": [{"id": "test-model"}]})
             self.requests.append(json.loads(request.content))
-            return httpx.Response(200, json={"choices": [{"message": {"content": "<think>private</think>Answer"}}]})
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {"message": {"content": "<think>private</think>Answer"}}
+                    ]
+                },
+            )
 
         client = self.client(handler)
         await client.initialize()
@@ -141,21 +159,47 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
                 server = request.url.path.split("/")[2]
                 method = payload["method"]
                 if method == "initialize":
-                    return httpx.Response(200, json={"result": {}}, headers={"mcp-session-id": server})
+                    return httpx.Response(
+                        200, json={"result": {}}, headers={"mcp-session-id": server}
+                    )
                 self.assertEqual(request.headers["mcp-session-id"], server)
                 if method == "notifications/initialized":
                     self.assertNotIn("id", payload)
                     return httpx.Response(202)
                 if method == "tools/list":
-                    return httpx.Response(200, json={"result": {"tools": [{
-                        "name": "health", "inputSchema": {"type": "object"},
-                    }]}})
+                    return httpx.Response(
+                        200,
+                        json={
+                            "result": {
+                                "tools": [
+                                    {
+                                        "name": "health",
+                                        "inputSchema": {"type": "object"},
+                                    }
+                                ]
+                            }
+                        },
+                    )
                 self.assertEqual(payload["params"], {"name": "health", "arguments": {}})
-                return httpx.Response(200, json={"result": {"content": [{"type": "text", "text": "OK"}]}})
+                return httpx.Response(
+                    200, json={"result": {"content": [{"type": "text", "text": "OK"}]}}
+                )
             self.requests.append(payload)
-            message = ({"tool_calls": [{"id": "call-1", "function": {
-                "name": "time__health", "arguments": "{}",
-            }}]} if len(self.requests) == 1 else {"content": "Healthy"})
+            message = (
+                {
+                    "tool_calls": [
+                        {
+                            "id": "call-1",
+                            "function": {
+                                "name": "time__health",
+                                "arguments": "{}",
+                            },
+                        }
+                    ]
+                }
+                if len(self.requests) == 1
+                else {"content": "Healthy"}
+            )
             return httpx.Response(200, json={"choices": [{"message": message}]})
 
         client = self.client(handler, mcp_servers=("time", "markdown"))
@@ -166,7 +210,10 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         tool = self.requests[1]["messages"][-1]
         self.assertEqual(tool["tool_call_id"], "call-1")
         self.assertEqual(json.loads(tool["content"])["content"][0]["text"], "OK")
-        self.assertEqual([item["role"] for item in history], ["user", "assistant", "tool", "assistant"])
+        self.assertEqual(
+            [item["role"] for item in history],
+            ["user", "assistant", "tool", "assistant"],
+        )
 
     async def test_model_http_failure_is_not_an_empty_success(self):
         client = self.client(lambda request: httpx.Response(503))
@@ -180,8 +227,9 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
             await client.mcp.call("time__health", "invalid")
 
     async def test_vision_support_tracks_live_server_capabilities(self):
-        responses = iter([{"modalities": {"vision": True}},
-                          {"modalities": {"vision": False}}, {}])
+        responses = iter(
+            [{"modalities": {"vision": True}}, {"modalities": {"vision": False}}, {}]
+        )
 
         def handler(request):
             self.assertEqual(request.url.path, "/props")
@@ -193,19 +241,37 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(await client.supports_images())
 
     def test_history_keeps_whole_tool_turns(self):
-        messages = [{"role": role} for role in (
-            "user", "assistant", "user", "assistant", "tool", "assistant", "user", "assistant",
-        )]
+        messages = [
+            {"role": role}
+            for role in (
+                "user",
+                "assistant",
+                "user",
+                "assistant",
+                "tool",
+                "assistant",
+                "user",
+                "assistant",
+            )
+        ]
         self.assertEqual(trim_history(messages, 5), messages[6:])
         self.assertEqual(trim_history(messages[:6], 2), messages[2:6])
 
 
 class TelegramTests(unittest.IsolatedAsyncioTestCase):
     def image_update(self):
-        message = SimpleNamespace(reply_text=AsyncMock(), chat_id=10,
-                                  media_group_id=None, caption="caption", text="/images")
-        return SimpleNamespace(effective_user=SimpleNamespace(id=1),
-                               effective_chat=SimpleNamespace(id=10), message=message)
+        message = SimpleNamespace(
+            reply_text=AsyncMock(),
+            chat_id=10,
+            media_group_id=None,
+            caption="caption",
+            text="/images",
+        )
+        return SimpleNamespace(
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=10),
+            message=message,
+        )
 
     async def test_images_command_reports_live_model_support(self):
         chat = SimpleNamespace(supports_images=AsyncMock(return_value=False))
@@ -216,10 +282,14 @@ class TelegramTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("model", update.message.reply_text.await_args.args[0])
         chat.supports_images.return_value = True
         await bot.command(update, SimpleNamespace())
-        self.assertEqual(update.message.reply_text.await_args.args[0], "Image support: enabled.")
+        self.assertEqual(
+            update.message.reply_text.await_args.args[0], "Image support: enabled."
+        )
 
     async def test_nonvision_images_are_rejected_before_download_and_inference(self):
-        chat = SimpleNamespace(supports_images=AsyncMock(return_value=False), complete=AsyncMock())
+        chat = SimpleNamespace(
+            supports_images=AsyncMock(return_value=False), complete=AsyncMock()
+        )
         bot = TelegramBot(config(Path("unused"), image_support_enabled=True), chat)
         bot.download_image = AsyncMock()
         update = self.image_update()
@@ -235,13 +305,17 @@ class TelegramTests(unittest.IsolatedAsyncioTestCase):
         bot.download_image = AsyncMock()
         update = self.image_update()
         await bot.command(update, SimpleNamespace())
-        self.assertIn("disabled in bot settings", update.message.reply_text.await_args.args[0])
+        self.assertIn(
+            "disabled in bot settings", update.message.reply_text.await_args.args[0]
+        )
         await bot.image_message(update, SimpleNamespace())
         bot.download_image.assert_not_awaited()
         chat.supports_images.assert_not_awaited()
 
     async def test_unreachable_server_does_not_allow_image_processing(self):
-        chat = SimpleNamespace(supports_images=AsyncMock(side_effect=httpx.ConnectError("offline")))
+        chat = SimpleNamespace(
+            supports_images=AsyncMock(side_effect=httpx.ConnectError("offline"))
+        )
         bot = TelegramBot(config(Path("unused"), image_support_enabled=True), chat)
         bot.download_image = AsyncMock()
         update = self.image_update()
@@ -256,13 +330,20 @@ class TelegramTests(unittest.IsolatedAsyncioTestCase):
         bot.respond = AsyncMock()
         update = self.image_update()
         await bot.image_message(update, SimpleNamespace())
-        bot.respond.assert_awaited_once_with(update.message, "caption", ["data:image/jpeg;base64,abc"])
+        bot.respond.assert_awaited_once_with(
+            update.message, "caption", ["data:image/jpeg;base64,abc"]
+        )
 
     async def test_unauthorized_images_are_not_downloaded(self):
-        bot = TelegramBot(config(Path("unused"), image_support_enabled=True), SimpleNamespace())
+        bot = TelegramBot(
+            config(Path("unused"), image_support_enabled=True), SimpleNamespace()
+        )
         message = SimpleNamespace(reply_text=AsyncMock(), chat_id=10)
-        update = SimpleNamespace(effective_user=SimpleNamespace(id=2),
-                                 effective_chat=SimpleNamespace(id=10), message=message)
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=2),
+            effective_chat=SimpleNamespace(id=10),
+            message=message,
+        )
         bot.download_image = AsyncMock()
         await bot.image_message(update, SimpleNamespace())
         bot.download_image.assert_not_awaited()
@@ -285,21 +366,32 @@ class TelegramTests(unittest.IsolatedAsyncioTestCase):
         second = asyncio.create_task(bot.respond(message, "second", []))
         release.set()
         await asyncio.wait_for(asyncio.gather(first, second), timeout=1)
-        self.assertEqual([item["content"] for item in bot.chats[10].history],
-                         ["first", "answer", "second", "answer"])
+        self.assertEqual(
+            [item["content"] for item in bot.chats[10].history],
+            ["first", "answer", "second", "answer"],
+        )
 
     async def test_images_reach_the_model_as_data_urls(self):
         async def complete(history):
-            self.assertEqual(history[-1]["content"], [
-                {"type": "text", "text": "caption"},
-                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,abc"}},
-            ])
+            self.assertEqual(
+                history[-1]["content"],
+                [
+                    {"type": "text", "text": "caption"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/jpeg;base64,abc"},
+                    },
+                ],
+            )
             history.append({"role": "assistant", "content": "Seen"})
             return "Seen"
 
         bot = TelegramBot(config(Path("unused")), SimpleNamespace(complete=complete))
-        await bot.respond(SimpleNamespace(reply_text=AsyncMock(), chat_id=10),
-                          "caption", ["data:image/jpeg;base64,abc"])
+        await bot.respond(
+            SimpleNamespace(reply_text=AsyncMock(), chat_id=10),
+            "caption",
+            ["data:image/jpeg;base64,abc"],
+        )
 
 
 if __name__ == "__main__":

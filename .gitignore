@@ -1,5 +1,7 @@
 .vscode/
 .state/
+.pixi/
+.ruff_cache/
 __pycache__/
 *.pyc
 *.pyo

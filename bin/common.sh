@@ -12,7 +12,10 @@ ACTIVE_AGENT_FILE="$STATE_DIR/active-agent"
 ACTIVE_MODEL_FILE="$STATE_DIR/active-model"
 ACTIVE_MCP_CONFIG_FILE="$STATE_DIR/active-mcp-config"
 
+# PID paths are consumed by stack.sh.
+# shellcheck disable=SC2034
 LLAMA_PID="$PID_DIR/llama.pid"
+# shellcheck disable=SC2034
 MCP_PROXY_PID="$PID_DIR/mcp-proxy.pid"
 
 ensure_runtime_dirs() {

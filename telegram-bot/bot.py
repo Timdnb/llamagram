@@ -16,7 +16,13 @@ from urllib.parse import quote
 
 import httpx
 from telegram import Message, Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from chat import ChatClient, trim_history
 from chat import Message as ChatMessage
@@ -53,10 +59,15 @@ def setup_logging(token: str) -> None:
     log_dir = Path(os.getenv("LOG_DIR", str(BASE_DIR / "logs")))
     log_dir.mkdir(parents=True, exist_ok=True)
     formatter = RedactingFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-    handlers = [logging.StreamHandler(), logging.FileHandler(log_dir / "bot.log", encoding="utf-8")]
+    handlers = [
+        logging.StreamHandler(),
+        logging.FileHandler(log_dir / "bot.log", encoding="utf-8"),
+    ]
     for handler in handlers:
         handler.setFormatter(formatter)
-    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(), handlers=handlers, force=True)
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", "INFO").upper(), handlers=handlers, force=True
+    )
 
 
 class TelegramBot:
@@ -74,14 +85,20 @@ class TelegramBot:
             raise
         logger.info(
             "Bot ready: agent=%s model=%s tools=%d",
-            self.config.agent_name, self.chat.model, len(self.chat.mcp.tools),
+            self.config.agent_name,
+            self.chat.model,
+            len(self.chat.mcp.tools),
         )
 
     async def shutdown(self, application: Application) -> None:
         await self.chat.http.aclose()
 
     async def authorized(self, update: Update) -> bool:
-        user, chat, message = update.effective_user, update.effective_chat, update.message
+        user, chat, message = (
+            update.effective_user,
+            update.effective_chat,
+            update.message,
+        )
         if user is None or chat is None or message is None:
             return False
         allowed = user.id in self.config.allowed_user_ids and (
@@ -93,14 +110,23 @@ class TelegramBot:
 
     async def image_support_status(self) -> tuple[bool, str]:
         if not self.config.image_support_enabled:
-            return False, "Image support: disabled in bot settings (IMAGE_SUPPORT_ENABLED=false)."
+            return (
+                False,
+                "Image support: disabled in bot settings (IMAGE_SUPPORT_ENABLED=false).",
+            )
         try:
             supported = await self.chat.supports_images()
         except httpx.HTTPError as exc:
             logger.warning("Could not check model vision support: %s", exc)
-            return False, "Image support: unavailable (could not check the running model)."
+            return (
+                False,
+                "Image support: unavailable (could not check the running model).",
+            )
         if not supported:
-            return False, "Image support: disabled (the running model has no vision support)."
+            return (
+                False,
+                "Image support: disabled (the running model has no vision support).",
+            )
         return True, "Image support: enabled."
 
     async def command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -110,7 +136,10 @@ class TelegramBot:
         command = message.text.split()[0].split("@")[0]
         # This command lets a user find the IDs needed to configure the allowlist.
         if command == "/whoami":
-            await reply(message, f"user_id={update.effective_user.id}\nchat_id={message.chat_id}")
+            await reply(
+                message,
+                f"user_id={update.effective_user.id}\nchat_id={message.chat_id}",
+            )
             return
         if not await self.authorized(update):
             return
@@ -129,7 +158,9 @@ class TelegramBot:
             text = HELP
         await reply(message, text)
 
-    async def text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def text_message(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         if await self.authorized(update):
             await self.respond(update.message, (update.message.text or "").strip(), [])
 
@@ -139,7 +170,10 @@ class TelegramBot:
             mime_type = "image/jpeg"
         else:
             attachment = message.document
-            mime_type = attachment.mime_type or mimetypes.guess_type(attachment.file_name or "")[0]
+            mime_type = (
+                attachment.mime_type
+                or mimetypes.guess_type(attachment.file_name or "")[0]
+            )
         if not mime_type or not mime_type.startswith("image/"):
             raise ValueError("Unsupported image type")
         if (attachment.file_size or 0) > self.config.max_image_bytes:
@@ -150,7 +184,9 @@ class TelegramBot:
             raise ValueError(f"Image exceeds {self.config.max_image_bytes} bytes")
         return f"data:{mime_type};base64,{base64.b64encode(data).decode('ascii')}"
 
-    async def image_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def image_message(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         if not await self.authorized(update):
             return
         message = update.message
@@ -174,9 +210,13 @@ class TelegramBot:
             await reply(messages[0], status)
             return
         if len(messages) > self.config.max_images_per_message:
-            raise ValueError(f"Maximum {self.config.max_images_per_message} images per message")
+            raise ValueError(
+                f"Maximum {self.config.max_images_per_message} images per message"
+            )
         images = [await self.download_image(message) for message in messages]
-        caption = next((message.caption.strip() for message in messages if message.caption), "")
+        caption = next(
+            (message.caption.strip() for message in messages if message.caption), ""
+        )
         await self.respond(messages[0], caption, images)
 
     async def respond(self, message: Message, text: str, images: list[str]) -> None:
@@ -187,23 +227,31 @@ class TelegramBot:
         async with state.lock:
             now = time.monotonic()
             if now - state.last_message_at < self.config.min_seconds_between_messages:
-                await reply(message, "You are sending messages too quickly. Please wait a moment.")
+                await reply(
+                    message,
+                    "You are sending messages too quickly. Please wait a moment.",
+                )
                 return
             state.last_message_at = now
             content: str | list[dict] = text
             if images:
                 content = ([{"type": "text", "text": text}] if text else []) + [
-                    {"type": "image_url", "image_url": {"url": image}} for image in images
+                    {"type": "image_url", "image_url": {"url": image}}
+                    for image in images
                 ]
             history = [*state.history, {"role": "user", "content": content}]
             logger.info(
                 "user_message chat_id=%s chars=%d images=%d",
-                message.chat_id, len(text), len(images),
+                message.chat_id,
+                len(text),
+                len(images),
             )
             answer = await self.chat.complete(history)
             state.history = trim_history(history, self.config.max_history_messages)
             await reply(message, answer, markdown=True)
-            logger.info("assistant_reply chat_id=%s chars=%d", message.chat_id, len(answer))
+            logger.info(
+                "assistant_reply chat_id=%s chars=%d", message.chat_id, len(answer)
+            )
 
     async def error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error("Request failed", exc_info=context.error)
@@ -221,8 +269,12 @@ class TelegramBot:
         )
         commands = ["start", "help", "system", "images", "whoami", "reset"]
         app.add_handler(CommandHandler(commands, self.command))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.text_message))
-        app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, self.image_message))
+        app.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND, self.text_message)
+        )
+        app.add_handler(
+            MessageHandler(filters.PHOTO | filters.Document.IMAGE, self.image_message)
+        )
         app.add_error_handler(self.error)
         return app
 

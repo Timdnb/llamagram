@@ -43,7 +43,9 @@ class BotConfig:
         token = os.environ["TELEGRAM_BOT_TOKEN"].strip()
         allowed_users = _ids(os.environ["TELEGRAM_ALLOWED_USER_IDS"])
         if not token or not allowed_users:
-            raise ValueError("TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USER_IDS are required")
+            raise ValueError(
+                "TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USER_IDS are required"
+            )
 
         state = root / ".state"
         agent = (state / "active-agent").read_text().strip()
@@ -70,7 +72,9 @@ class BotConfig:
             image_support_enabled=os.getenv("IMAGE_SUPPORT_ENABLED", "false").lower()
             in {"1", "true", "yes", "on"},
             max_history_messages=int(os.getenv("MAX_HISTORY_MESSAGES", "20")),
-            min_seconds_between_messages=float(os.getenv("MIN_SECONDS_BETWEEN_MESSAGES", "0.8")),
+            min_seconds_between_messages=float(
+                os.getenv("MIN_SECONDS_BETWEEN_MESSAGES", "0.8")
+            ),
             max_tool_steps=int(os.getenv("MAX_TOOL_STEPS", "8")),
             max_image_bytes=int(os.getenv("MAX_IMAGE_BYTES", str(10 * 1024 * 1024))),
             max_images_per_message=int(os.getenv("MAX_IMAGES_PER_MESSAGE", "4")),
@@ -81,6 +85,11 @@ class BotConfig:
             config.max_image_bytes,
             config.max_images_per_message,
         )
-        if any(limit < 1 for limit in limits) or config.min_seconds_between_messages < 0:
-            raise ValueError("Limits must be positive and the message interval must be nonnegative")
+        if (
+            any(limit < 1 for limit in limits)
+            or config.min_seconds_between_messages < 0
+        ):
+            raise ValueError(
+                "Limits must be positive and the message interval must be nonnegative"
+            )
         return config

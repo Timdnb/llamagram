@@ -134,7 +134,9 @@ def read_markdown(path: str | None = None) -> dict[str, Any]:
 
 
 @mcp.tool()
-def write_markdown(path: str | None, content: str, overwrite: bool = True) -> dict[str, Any]:
+def write_markdown(
+    path: str | None, content: str, overwrite: bool = True
+) -> dict[str, Any]:
     """Write markdown content (atomic write)."""
     target = _coerce_target_path(path)
     _assert_markdown_path(target)
@@ -152,7 +154,9 @@ def write_markdown(path: str | None, content: str, overwrite: bool = True) -> di
 
 
 @mcp.tool()
-def append_markdown(path: str | None, content: str, ensure_leading_newline: bool = True) -> dict[str, Any]:
+def append_markdown(
+    path: str | None, content: str, ensure_leading_newline: bool = True
+) -> dict[str, Any]:
     """Append content to a markdown file."""
     target = _coerce_target_path(path)
     _assert_markdown_path(target)
@@ -163,7 +167,11 @@ def append_markdown(path: str | None, content: str, ensure_leading_newline: bool
             raise ValueError(f"path is not a file: {target}")
         existing = target.read_text(encoding="utf-8")
 
-    prefix = "\n" if ensure_leading_newline and existing and not existing.endswith("\n") else ""
+    prefix = (
+        "\n"
+        if ensure_leading_newline and existing and not existing.endswith("\n")
+        else ""
+    )
     updated = f"{existing}{prefix}{content}"
     _atomic_write(target, updated)
     return {
@@ -174,7 +182,9 @@ def append_markdown(path: str | None, content: str, ensure_leading_newline: bool
 
 
 @mcp.tool()
-def replace_in_markdown(path: str | None, old_text: str, new_text: str, max_replacements: int = -1) -> dict[str, Any]:
+def replace_in_markdown(
+    path: str | None, old_text: str, new_text: str, max_replacements: int = -1
+) -> dict[str, Any]:
     """Replace text in a markdown file."""
     target = _coerce_target_path(path)
     _assert_markdown_path(target)
@@ -185,9 +195,13 @@ def replace_in_markdown(path: str | None, old_text: str, new_text: str, max_repl
 
     original = target.read_text(encoding="utf-8")
     total_matches = original.count(old_text)
-    updated = original.replace(old_text, new_text, max_replacements if max_replacements >= 0 else -1)
+    updated = original.replace(
+        old_text, new_text, max_replacements if max_replacements >= 0 else -1
+    )
 
-    replacements = total_matches if max_replacements < 0 else min(total_matches, max_replacements)
+    replacements = (
+        total_matches if max_replacements < 0 else min(total_matches, max_replacements)
+    )
     _atomic_write(target, updated)
     return {
         "path": _relative_to_scope(target),

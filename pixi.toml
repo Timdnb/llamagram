@@ -1,0 +1,29 @@
+[workspace]
+name = "llamagram"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+requires-pixi = ">=0.65.0"
+
+[dependencies]
+python = "3.12.*"
+ruff = ">=0.14,<1"
+shellcheck = ">=0.10,<1"
+
+[pypi-dependencies]
+python-telegram-bot = "==21.6"
+httpx = "==0.28.1"
+python-dotenv = "==1.0.1"
+mcp = "==1.28.1"
+mcp-proxy = "==0.12.0"
+
+[tasks]
+bot = { cmd = "python bot.py", cwd = "telegram-bot" }
+test-core = "python -m unittest discover -s tests -v"
+test-bot = { cmd = "python -m unittest discover -s tests -v", cwd = "telegram-bot" }
+test = { depends-on = ["test-core", "test-bot"] }
+lint-python = "ruff check ."
+lint-shell = "shellcheck llm.sh bin/*.sh telegram-bot/start.sh"
+lint = { depends-on = ["lint-python", "lint-shell"] }
+format = "ruff format ."
+format-check = "ruff format --check ."
+check = { depends-on = ["lint", "format-check", "test"] }

@@ -4,6 +4,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+if [ "${PIXI_WORKSPACE_ROOT:-${PIXI_PROJECT_ROOT:-}}" != "$ROOT_DIR" ]; then
+    exec pixi run --locked --manifest-path "$ROOT_DIR/pixi.toml" bash "$ROOT_DIR/llm.sh" "$@"
+fi
+
 # shellcheck disable=SC1091
 source "$ROOT_DIR/bin/common.sh"
 # shellcheck disable=SC1091
@@ -58,7 +62,7 @@ load_agent() {
     done
 
     set -a
-    # shellcheck disable=SC1090
+    # shellcheck disable=SC1090,SC1091
     source "$AGENT_DIR/agent.env"
     set +a
     MODEL_NAME="${2:-${AGENT_MODEL:-}}"
@@ -96,11 +100,11 @@ ensure_runtime_dirs
 load_root_env
 load_llama_defaults
 
-cmd="${1:-help}"
+command="${1:-help}"
 arg="${2:-}"
 model="${3:-}"
 
-case "$cmd" in
+case "$command" in
     list-agents)
         list_agents
         ;;
@@ -149,7 +153,7 @@ case "$cmd" in
         usage
         ;;
     *)
-        echo "Unknown command: $cmd"
+        echo "Unknown command: $command"
         usage
         exit 1
         ;;

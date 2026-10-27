@@ -132,7 +132,7 @@ start_mcp() {
         return 1
     fi
 
-    nohup uvx mcp-proxy \
+    nohup mcp-proxy \
         --named-server-config "$AGENT_RENDERED_MCP_CONFIG" \
         --allow-origin '*' \
         --port "$MCP_PROXY_PORT" \

@@ -18,8 +18,12 @@ Message = dict[str, Any]
 
 def trim_history(messages: list[Message], limit: int) -> list[Message]:
     """Drop whole turns, retaining the latest even when it exceeds the budget."""
-    starts = [index for index, message in enumerate(messages) if message["role"] == "user"]
-    start = next((index for index in starts if len(messages) - index <= limit), starts[-1])
+    starts = [
+        index for index, message in enumerate(messages) if message["role"] == "user"
+    ]
+    start = next(
+        (index for index in starts if len(messages) - index <= limit), starts[-1]
+    )
     return messages[start:]
 
 
@@ -31,7 +35,9 @@ class MCPClient:
         self.tools: list[dict[str, Any]] = []
         self.routes: dict[str, tuple[str, str]] = {}
 
-    async def rpc(self, server: str, method: str, params: dict, *, notify: bool = False) -> dict:
+    async def rpc(
+        self, server: str, method: str, params: dict, *, notify: bool = False
+    ) -> dict:
         payload = {"jsonrpc": "2.0", "method": method, "params": params}
         if not notify:
             payload["id"] = uuid.uuid4().hex
@@ -73,24 +79,30 @@ class MCPClient:
                 # Different servers can expose tools with the same name (e.g. health).
                 name = f"{server}__{tool['name']}"
                 self.routes[name] = (server, tool["name"])
-                self.tools.append({
-                    "type": "function",
-                    "function": {
-                        "name": name,
-                        "description": tool.get("description", ""),
-                        "parameters": tool["inputSchema"],
-                    },
-                })
+                self.tools.append(
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "description": tool.get("description", ""),
+                            "parameters": tool["inputSchema"],
+                        },
+                    }
+                )
 
     async def call(self, name: str, arguments: str) -> dict:
         server, tool = self.routes[name]
         params = json.loads(arguments)
         if not isinstance(params, dict):
             raise ValueError("Tool arguments must be a JSON object")
-        result = await self.rpc(server, "tools/call", {"name": tool, "arguments": params})
+        result = await self.rpc(
+            server, "tools/call", {"name": tool, "arguments": params}
+        )
         logger.info(
             "tool_call server=%s tool=%s ok=%s",
-            server, tool, not result.get("isError", False),
+            server,
+            tool,
+            not result.get("isError", False),
         )
         return result
 
@@ -141,9 +153,11 @@ class ChatClient:
             for call in calls:
                 function = call["function"]
                 result = await self.mcp.call(function["name"], function["arguments"])
-                history.append({
-                    "role": "tool",
-                    "tool_call_id": call["id"],
-                    "content": json.dumps(result, ensure_ascii=False),
-                })
+                history.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call["id"],
+                        "content": json.dumps(result, ensure_ascii=False),
+                    }
+                )
         raise RuntimeError("Stopped after too many tool steps")

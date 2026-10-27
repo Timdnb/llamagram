@@ -11,7 +11,9 @@ from telegram.error import BadRequest
 
 # Keep each chunk below Telegram's text limit, including non-BMP characters.
 CHUNK_SIZE = 1800
-INLINE = re.compile(r"(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(?<!\w)(\*[^*\n]+\*|_[^_\n]+_)(?!\w)")
+INLINE = re.compile(
+    r"(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(?<!\w)(\*[^*\n]+\*|_[^_\n]+_)(?!\w)"
+)
 THINK_BLOCK = re.compile(r"<think>.*?(?:</think>|$)", re.DOTALL)
 
 
@@ -40,14 +42,18 @@ def _inline(text: str) -> str:
 def telegram_html(text: str) -> str:
     parts = []
     # Code fences are handled before inline formatting, including unfinished fences.
-    for index, part in enumerate(re.split(r"^```[^\n]*\n?|^```\s*$", text, flags=re.MULTILINE)):
+    for index, part in enumerate(
+        re.split(r"^```[^\n]*\n?|^```\s*$", text, flags=re.MULTILINE)
+    ):
         if index % 2:
             parts.append(f"<pre><code>{html.escape(part)}</code></pre>")
             continue
         lines = []
         for line in part.split("\n"):
             heading = re.match(r"^#{1,6}\s+(.+)", line)
-            lines.append(f"<b>{html.escape(heading[1])}</b>" if heading else _inline(line))
+            lines.append(
+                f"<b>{html.escape(heading[1])}</b>" if heading else _inline(line)
+            )
         parts.append("\n".join(lines))
     return "".join(parts)
 

@@ -16,11 +16,12 @@ coding agent, ask it to read that file and follow it for your requested setup.
 
 ## Setup
 
-Requires Linux, Bash 4.3+, Python 3.11+, `uv`/`uvx`, and a built
+Requires Linux (x86-64), Bash 4.3+, [Pixi](https://pixi.sh), and a built
 [llama-server](https://github.com/ggml-org/llama.cpp).
 Qwen3.8 needs an MTP-aware runtime; these profiles are verified with build b11669.
 
 ```bash
+pixi install --locked
 cp .env.example .env
 ```
 
@@ -93,6 +94,11 @@ For no tools:
 `agent.env` and credentials in the ignored root `.env`. Model changes leave
 this tool configuration intact.
 
+The proxy and bundled Python servers run in the Pixi environment. Use `python`
+as the command for bundled servers. For another Python MCP, add its package with
+`pixi add --pypi <package>` and configure its executable in the agent's JSON.
+External servers can also use their own documented runtime.
+
 ## Commands
 
 ```bash
@@ -110,12 +116,19 @@ Stop the Telegram bot before switching agents or models, wait for the new model
 to load, then start the bot again. Prompt edits are picked up automatically.
 Runtime config, logs, and PIDs live in the ignored `.state/` directory.
 
-## Checks
+## Development
 
 ```bash
-python3 -m unittest discover -s tests -v
+pixi run check          # Python and shell lint, formatting check, tests
+pixi run format        # format Python files
+pixi run test          # tests only; no model, GPU, or Telegram credentials needed
 ```
 
-Bot checks are in [telegram-bot/README.md](telegram-bot/README.md).
+Dependencies and commands live in `pixi.toml`; commit `pixi.lock` to keep installs
+reproducible. Use `pixi add` (or `pixi add --pypi`) to add dependencies and
+`pixi update <package>` for deliberate updates, then run the checks.
+
+GitHub Actions runs `pixi run --locked check` on pushes and pull requests.
+Tests use Python's `unittest`; no coverage target is enforced.
 
 [MIT License](LICENSE).

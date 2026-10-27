@@ -33,7 +33,7 @@ class StackTests(unittest.TestCase):
         (self.models / "projector.gguf").touch()
         (self.root / "models/original.env").write_text(
             'LLAMA_MODEL="${LLAMA_MODELS_DIR}/original.gguf"\n'
-            'LLAMA_FLAG_CTX_SIZE=16384\n'
+            "LLAMA_FLAG_CTX_SIZE=16384\n"
         )
         (self.root / "models/original-vision.env").write_text(
             'source "${ROOT_DIR}/models/original.env"\n'
@@ -42,14 +42,20 @@ class StackTests(unittest.TestCase):
         path = self.models / "Qwen3.8/27B"
         path.mkdir(parents=True)
         (path / "Qwen3.8-27B-UD-IQ3_XXS.gguf").touch()
-        self.env = {key: value for key, value in os.environ.items()
-                    if not key.startswith(("AGENT_", "LLAMA_"))}
+        self.env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(("AGENT_", "LLAMA_"))
+        }
         self.env["LLAMA_MODELS_DIR"] = str(self.models)
+        self.env["PIXI_WORKSPACE_ROOT"] = str(self.root)
         (self.root / "infra/llama").mkdir(parents=True)
-        shutil.copy(ROOT / "infra/llama/defaults.env", self.root / "infra/llama/defaults.env")
+        shutil.copy(
+            ROOT / "infra/llama/defaults.env", self.root / "infra/llama/defaults.env"
+        )
         # Preserve the real flag builder; replace only process lifecycle functions.
         with (self.root / "bin/stack.sh").open("a") as handle:
-            handle.write('''
+            handle.write("""
 start_llama() {
     local cmd=(--model "$LLAMA_MODEL" --alias "$LLAMA_ALIAS")
     append_llama_flags cmd
@@ -58,12 +64,15 @@ start_llama() {
 start_mcp() { :; }
 stop_mcp() { echo mcp >> "$ROOT_DIR/stopped"; }
 stop_llama() { echo llama >> "$ROOT_DIR/stopped"; }
-''')
+""")
 
     def run_stack(self, *args):
         return subprocess.run(
-            ["bash", str(self.root / "llm.sh"), *args], env=self.env,
-            capture_output=True, text=True, timeout=5,
+            ["bash", str(self.root / "llm.sh"), *args],
+            env=self.env,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
 
     def test_model_override_replaces_flags_and_preserves_agent_alias(self):
@@ -75,10 +84,14 @@ stop_llama() { echo llama >> "$ROOT_DIR/stopped"; }
         self.assertEqual(args[args.index("--parallel") + 1], "1")
         self.assertEqual(args[args.index("--min-p") + 1], "0.0")
         self.assertEqual(args[args.index("--n-gpu-layers") + 1], "auto")
-        self.assertEqual(args[args.index("--chat-template-kwargs") + 1], '{"reasoning_effort":"low"}')
+        self.assertEqual(
+            args[args.index("--chat-template-kwargs") + 1], '{"reasoning_effort":"low"}'
+        )
         self.assertIn("--jinja", args)
         self.assertNotIn("--mmproj", args)
-        self.assertEqual((self.root / ".state/active-model").read_text().strip(), "qwen38-iq3")
+        self.assertEqual(
+            (self.root / ".state/active-model").read_text().strip(), "qwen38-iq3"
+        )
 
     def test_omitting_model_restores_agent_default(self):
         self.run_stack("start", "test", "qwen38-iq3")
@@ -96,7 +109,9 @@ stop_llama() { echo llama >> "$ROOT_DIR/stopped"; }
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Model file not found", result.stdout)
         self.assertFalse((self.root / "stopped").exists())
-        self.assertEqual((self.root / ".state/active-model").read_text().strip(), "original-vision")
+        self.assertEqual(
+            (self.root / ".state/active-model").read_text().strip(), "original-vision"
+        )
 
     def test_unknown_models_and_path_traversal_fail_before_stopping(self):
         for name in ("unknown", "../outside"):
@@ -115,9 +130,7 @@ stop_llama() { echo llama >> "$ROOT_DIR/stopped"; }
     def test_numeric_zero_and_on_are_values_and_false_omits_switch(self):
         with (self.root / "models/original.env").open("a") as handle:
             handle.write(
-                "LLAMA_FLAG_SEED=0\n"
-                "LLAMA_FLAG_FLASH_ATTN=on\n"
-                "LLAMA_FLAG_JINJA=false\n"
+                "LLAMA_FLAG_SEED=0\nLLAMA_FLAG_FLASH_ATTN=on\nLLAMA_FLAG_JINJA=false\n"
             )
         result = self.run_stack("start", "test")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -130,18 +143,20 @@ stop_llama() { echo llama >> "$ROOT_DIR/stopped"; }
         setting = 'quoted "value" with a backslash \\ and space'
         self.env["TOOL_SETTING"] = setting
         agent = self.root / "agents/test"
-        (agent / "mcp.config.json").write_text('''{
+        (agent / "mcp.config.json").write_text("""{
             "mcpServers": {"example": {
                 "command": "python3",
                 "args": ["${AGENT_DIR}/server.py", "${TOOL_SETTING}"],
                 "env": {"SETTING": "${TOOL_SETTING}"}
             }}
-        }''')
+        }""")
         rendered = self.root / ".state/generated/test-mcp.config.json"
         self.assertEqual(self.run_stack("start", "test").returncode, 0)
         original = json.loads(rendered.read_text())
-        self.assertEqual(original["mcpServers"]["example"]["args"],
-                         [str(agent / "server.py"), setting])
+        self.assertEqual(
+            original["mcpServers"]["example"]["args"],
+            [str(agent / "server.py"), setting],
+        )
         result = self.run_stack("restart", "test", "qwen38-iq3")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(json.loads(rendered.read_text()), original)

@@ -11,8 +11,8 @@ the local agent, not the coding assistant's own tools or system prompt.
 
 ## Establish the setup
 
-Read `README.md`, the relevant starter agent, and the selected model file. Check
-existing configuration before changing it. Inspect `llm.sh`, `bin/`, or
+Read `README.md`, `pixi.toml`, the relevant starter agent, and the selected model
+file. Check existing configuration before changing it. Inspect `llm.sh`, `bin/`, or
 `telegram-bot/README.md` when their behavior matters; prefer the checkout's actual
 contract if it has changed since this skill was written.
 
@@ -77,9 +77,12 @@ variables from `.env`, `agent.env`, and the model file expand inside JSON string
 values. Define every placeholder. Preserve existing `.env` entries; do not put
 credential values in tracked JSON, prompts, command examples, or logs.
 
-Reuse `agents/timekeeper/mcp.config.json` for local time tooling. For external
-MCPs, verify their actual launch command, authentication steps, tool names, and
-filtering options. The current proxy configuration launches stdio servers; a
+The controller and bot run in the locked Pixi environment. Use `python` for
+bundled servers; reuse `agents/timekeeper/mcp.config.json` for local time tooling.
+Add Python server dependencies with `pixi add --pypi <package>` and commit both
+`pixi.toml` and `pixi.lock`. External servers may use their documented runtime.
+For external MCPs, verify their launch command, authentication steps, tool names,
+and filtering options. The current proxy configuration launches stdio servers; a
 remote HTTP MCP may need a supported stdio bridge. Do not invent a URL-based
 config shape or unsupported per-tool filters. Leave interactive account login to
 the user when it cannot be completed through their authorized session.
@@ -123,8 +126,9 @@ it does not configure the llama-server web UI's system prompt.
 
 Check Bash syntax for edited env files, parse MCP JSON, resolve model/projector
 paths, and verify required variables and memory targets. For code changes, run
-the affected checks documented in the repository. For configuration-only changes,
-validate the resulting configuration; avoid adding tests that restate file text.
+`pixi run check` (lint, formatting, and tests). Use `pixi run format` to format
+Python changes. For configuration-only changes, validate the resulting
+configuration; avoid adding tests that restate file text.
 
 If running the agent is in scope, inspect `./llm.sh status` first. Use:
 
