@@ -3,6 +3,17 @@
 Run a local LLM with MCP tools and chat with it through Telegram.
 One agent stack runs at a time.
 
+## Set up with a coding agent
+
+Open this checkout in Codex or Claude Code and ask:
+
+> Use the llamagram-setup skill to create a notes-helper agent using an installed
+> model, with a concise prompt and access to one Markdown notes file.
+
+The shared [setup skill](.agents/skills/llamagram-setup/SKILL.md) is discoverable
+in Codex as `$llamagram-setup` and Claude Code as `/llamagram-setup`. For another
+coding agent, ask it to read that file and follow it for your requested setup.
+
 ## Setup
 
 Requires Linux, Bash 4.3+, Python 3.11+, `uv`/`uvx`, and a built
