@@ -5,14 +5,17 @@ One agent stack runs at a time.
 
 ## Set up with a coding agent
 
-Open this checkout in Codex or Claude Code and ask:
+Give your coding agent the [setup skill](.agents/skills/llamagram-setup/SKILL.md)
+and ask:
 
-> Use the llamagram-setup skill to create a notes-helper agent using an installed
-> model, with a concise prompt and access to one Markdown notes file.
+> Use llamagram-setup to prepare a local notes-helper agent. Check my hardware,
+> choose a suitable Unsloth model, give it access to one Markdown notes file,
+> and show me how to launch it.
 
-The shared [setup skill](.agents/skills/llamagram-setup/SKILL.md) is discoverable
-in Codex as `$llamagram-setup` and Claude Code as `/llamagram-setup`. For another
-coding agent, ask it to read that file and follow it for your requested setup.
+The skill covers installation, hardware-based model selection, MCP capabilities,
+and configuration with launch instructions. In a checkout, Codex discovers it as
+`$llamagram-setup` and Claude Code as `/llamagram-setup`. Another coding agent can
+read the linked file; an existing setup can skip the installation steps.
 
 ## Setup
 

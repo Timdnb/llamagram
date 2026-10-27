@@ -1,64 +1,188 @@
 ---
 name: llamagram-setup
-description: Create or update a local llamagram agent from a natural-language request, configuring its model, system prompt, MCP tools, optional memory, and Telegram capabilities. Use for agent setup and model/tool changes in a llamagram checkout.
+description: Set up a custom local llamagram agent, from cloning the repo and preparing llama-server to choosing an Unsloth GGUF for the user's hardware, configuring MCP capabilities, and creating agent files with launch instructions. Use for first installations and existing agent, model, or tool changes.
 ---
 
-# Set up a llamagram agent
+# Set up a custom llamagram agent
 
-Turn the user's request into a usable local agent. Work from the llamagram
-repository root; all paths below are relative to that root. This skill configures
-the local agent, not the coding assistant's own tools or system prompt.
+Turn the user's request into a usable local agent through the four stages below.
+Start with the existing installation when available; skip completed stages rather
+than rebuilding or downloading unnecessarily. This skill sets up the local agent;
+its MCP tools and prompt belong to llamagram, not the coding assistant.
 
-## Establish the setup
+Establish the intended role, response style, required services/data, image input,
+persistent notes, and preference for speed versus quality. Use information already
+supplied. Inspect what is available locally before asking for missing details;
+ask only when a choice materially affects the result. A setup request authorizes
+setup work, not unrelated external actions or publishing personal configuration.
 
-Read `README.md`, `pixi.toml`, the relevant starter agent, and the selected model
-file. Check existing configuration before changing it. Inspect `llm.sh`, `bin/`, or
-`telegram-bot/README.md` when their behavior matters; prefer the checkout's actual
-contract if it has changed since this skill was written.
+## 1. Prepare the installation and paths
 
-Identify the agent's purpose, response style, needed data/actions, model, and
-whether it needs images or persistent notes. Use preferences already supplied.
-Ask only for material missing choices, such as which service/account to connect,
-whether actions should be read-only, or hardware limits when choosing a new model.
-State reasonable defaults and continue with independent configuration work.
+For a fresh installation, clone [llamagram](https://github.com/Timdnb/llamagram)
+into the user's chosen location. Reuse an existing checkout without overwriting
+local changes. Read its `README.md`, `pixi.toml`, and relevant starter files;
+inspect `llm.sh`, `bin/`, and `telegram-bot/` when behavior matters. The checkout's
+actual contract takes precedence over stale examples in this skill.
 
-Reuse installed models and MCP servers when they fit. If a download is needed,
-check the exact artifact, size, destination, free space, and runtime compatibility.
-Resolve an unclear model choice before a large download; preserve authorization
-already given. Use upstream documentation for external servers and runtime flags.
-Do not treat a model listed in `models/` as proof its weights are installed.
+The current checkout targets Linux x86-64 and Bash 4.3+. Check the OS and
+architecture; explain any unsupported platform work before promising a working
+installation. Install or reuse [Pixi](https://pixi.sh), then run
+`pixi install --locked` from the checkout. Pixi supplies Python and the bot/MCP
+dependencies. A llama.cpp build also needs its native compiler, CMake, and the
+selected backend's prerequisites; Pixi's Python environment alone is insufficient.
 
-## Keep configuration modular
+Reuse a compatible `llama-server` if installed. Otherwise obtain
+[llama.cpp](https://github.com/ggml-org/llama.cpp) outside the llamagram checkout
+and follow its current [build instructions](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md).
+Choose the backend for the detected GPU, or CPU inference when appropriate.
+For NVIDIA, check the driver and CUDA toolkit separately; `nvidia-smi` alone does
+not prove that the CUDA compiler is installed. After choosing `llama_cpp_dir`,
+a typical NVIDIA source build is:
 
-| Path | Put here |
+```bash
+cmake -S "$llama_cpp_dir" -B "$llama_cpp_dir/build" \
+  -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON
+cmake --build "$llama_cpp_dir/build" --config Release --target llama-server -j 2
+```
+
+Adjust build parallelism to the CPU and available RAM. For another backend, use
+its documented options instead of reusing CUDA flags. Verify the resulting
+binary with `--version` and `--help`, including its runtime library requirements.
+Record its version/commit and recheck model compatibility in stage 2; preserve a
+working runtime when a different build is needed for a new model.
+
+Create root `.env` from `.env.example` only if absent; merge needed values into
+an existing file. Set `LLAMA_SERVER_BIN` to the executable's absolute path and
+`LLAMA_MODELS_DIR` to a writable weights directory outside the checkout. Quote
+paths containing spaces. Set `LOCAL_TIMEZONE` to the user's IANA timezone, or
+use UTC when no preference is supplied. Keep machine paths and credentials in
+ignored env files. Do not replace the templates with one user's paths.
+
+## 2. Select and obtain a model for the hardware
+
+Inventory the actual machine, including currently available resources:
+
+| Resource | Establish |
 |---|---|
+| GPU | Vendor, model, total/free VRAM, supported inference backend |
+| CPU | Model, cores, and likely CPU inference/offload constraints |
+| RAM | Installed and currently available host memory |
+| Storage | SSD or HDD for the weights, free space on that filesystem |
+
+On Linux, useful read-only checks include `lscpu`, `free -h`, `lsblk`, and
+`df -h` for the chosen model destination. For NVIDIA, use
+`nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader`.
+If a detail cannot be detected reliably, ask rather than inferring it from
+another user's machine or this repository's existing profiles.
+
+Prefer [Unsloth GGUFs](https://huggingface.co/unsloth) for new downloads. Consult
+its [model catalog](https://unsloth.ai/docs/get-started/unsloth-model-catalog),
+the chosen model's current Unsloth guide, Hugging Face model card, and exact
+file listing. Select an instruction/chat model with the required tool calling,
+language, reasoning, and vision support. Choose GGUF artifacts for llama.cpp;
+other formats in Unsloth's catalog are not interchangeable.
+
+Compare model size and quantization together. Estimate a memory budget for
+resident weights, context/KV cache or architecture-specific state, compute
+buffers, and an image projector if needed, leaving room for the OS and desktop.
+Account for MCP schemas, history, tool results, reasoning, and images when
+choosing context length. GGUF file size is not total runtime memory; MoE active
+parameter count is not the size of all its weights.
+
+Favor a configuration with useful memory headroom and responsive interaction.
+When weights need CPU/RAM offload, explain the likely speed cost and CPU/memory
+constraints; do not treat free RAM as equivalent to VRAM. SSD storage helps
+loading, while insufficient memory and disk paging can make interaction slow,
+especially on HDDs. Disk capacity is not a substitute for RAM or VRAM. Avoid
+unsupported tokens-per-second promises; label estimates and measure when able.
+
+Recommend one model/quantization and, when useful, one smaller/faster or
+higher-quality alternative. Explain why the recommendation fits the hardware
+and purpose, with source links and expected tradeoffs. Respect an already
+selected model; surface a concrete fit or compatibility problem if present.
+Resolve material ambiguity before a large download without asking again for
+choices or downloads the user already authorized.
+
+Before downloading, verify the exact repo, revision, filenames, total bytes,
+free destination space, and llama.cpp support for that architecture and GGUF
+variant. Include all shards for the selected quantization and its matching
+vision projector when required; do not download every quantization in the repo.
+Use a resumable downloader with explicit file selection. Obtain download tools
+through Pixi when needed rather than adding another project dependency manager.
+Keep upstream filenames under a consistent layout such as:
+
+```text
+<LLAMA_MODELS_DIR>/<family>/<variant>/<upstream-filename>.gguf
+```
+
+Check completion against upstream sizes/checksums when available. Configure a
+sharded model using the documented entry shard. A profile in `models/` is not
+proof its weights are installed. Verify model-specific runtime flags and chat
+template settings against upstream guidance and the installed server's help.
+Missing tensors can mean an incompatible runtime; investigate before assuming
+the download is corrupt or replacing a working runtime.
+
+## 3. Select the agent's capabilities
+
+Translate the requested abilities into the smallest useful set of MCP servers.
+Reuse bundled time tooling or scoped Markdown notes when they fit. Select MCPs
+per agent so switching models preserves its tools and prompt. Tool calling is
+a model requirement; installing an MCP does not make an unsuitable model good
+at using tools. Revise stage 2 if the selected capabilities change its needs.
+
+For external MCPs, verify their maintained launch command, dependencies,
+authentication, exposed tools, and supported filtering options. The proxy
+launches stdio servers; a remote HTTP MCP may need a documented stdio bridge.
+Do not invent a URL-based config shape or unsupported per-tool filters. Scope
+file/account access to the request and honor read-only preferences. Complete
+available setup work and identify any login that requires the user.
+
+Bundled servers run with `python` in the locked Pixi environment. Add a Python
+server package with `pixi add --pypi <package>` when appropriate, keeping the
+manifest and lockfile together. External servers can use their documented
+runtime. If required authentication or tooling cannot be completed, report the
+remaining step rather than claiming the capability works.
+
+For notes, use `mcps/markdown/server.py` with
+`--target=${AGENT_MCP_MARKDOWN_TARGET}`. Set that variable in `agent.env`, for
+example `AGENT_MCP_MARKDOWN_TARGET="${AGENT_DIR}/notes.md"`, and create the file.
+Scope it to the requested file/directory. Instruct the agent when to read and
+update notes. Chat history is in memory and disappears on reset/restart.
+
+For vision, obtain the selected family's compatible projector and set
+`LLAMA_FLAG_MMPROJ` in a vision model profile. Telegram also requires
+`IMAGE_SUPPORT_ENABLED=true`; confirm the loaded server's `/props` reports
+`modalities.vision` and check `/images`. A bot setting cannot add model vision.
+A prompt likewise cannot provide scheduling, background execution, audio, or
+other behavior that the stack does not implement; identify additional work.
+
+## 4. Write the configuration and hand over a runnable agent
+
+Use the choices above to create or update these files, relative to the checkout:
+
+| Path | Contents |
+|---|---|
+| `.env` | Absolute runtime/model-root paths, timezone, service credentials; ignored |
 | `models/<model>.env` | `LLAMA_MODEL` and `LLAMA_FLAG_*` inference settings |
-| `agents/<agent>/agent.env` | `AGENT_MODEL` and agent-specific MCP settings |
+| `agents/<agent>/agent.env` | `AGENT_MODEL` and agent-specific `AGENT_MCP_*` settings |
 | `agents/<agent>/mcp.config.json` | Enabled MCP servers and their launch configuration |
-| `agents/<agent>/system.md` | The local agent's instructions |
-| `.env` | Machine paths, timezone, and service credentials; ignored by Git |
-| `telegram-bot/.env` | Telegram token, access lists, attachment limits, and image opt-in |
+| `agents/<agent>/system.md` | Role, tone, context, and instructions for the configured tools |
+| `telegram-bot/.env` | Telegram token, user/chat allowlists, image opt-in, limits; ignored |
 
-Use a simple lowercase hyphenated agent name. Create the three required agent
-files even when the prompt is short or no tools are needed. Default new personal
-agent directories to Git-ignored; publish a reusable example only when requested.
-Keep personal prompts and notes out of public documentation and commits.
+Use a lowercase hyphenated agent name. Create all three required agent files,
+even for a short prompt or no tools. Default new personal agent directories and
+notes to Git-ignored. Publish reusable examples only when requested; keep
+personal prompts, memory, and credentials out of public docs and commits.
 
-Keep shared profiles reusable. To customize inference settings for one agent,
-create a named model variant rather than changing a shared profile unexpectedly
-or putting inference flags back into `agent.env`. A model variant can source a
-base file using `${ROOT_DIR}/models/<base>.env` and override selected settings.
+In model profiles, use `LLAMA_MODEL="${LLAMA_MODELS_DIR}/..."` and relevant
+flags without machine-specific comments. `LLAMA_FLAG_CTX_SIZE` becomes
+`--ctx-size`; `true` adds a switch, `false` omits it, and other values, including
+`0`, `1`, `on`, and `off`, are passed literally. The controller owns alias and
+port. Keep shared profiles reusable: create a named variant for agent-specific
+inference settings. A variant can source `${ROOT_DIR}/models/<base>.env` and
+override selected values; a vision variant can add its projector this way.
 
-Weights belong under `LLAMA_MODELS_DIR`, outside the repository. Use that variable
-in model files. Keep profiles to relevant settings, without machine-specific
-comments. The controller owns model alias and port. `LLAMA_FLAG_CTX_SIZE` becomes
-`--ctx-size`; `true` adds a switch, `false` omits it, and other values—including
-`0`, `1`, `on`, and `off`—are passed literally.
-
-## Configure tools and memory
-
-Select MCPs per agent in `mcp.config.json`, not in model profiles or the coding
-assistant's global MCP settings. The supported local shape is:
+Use this supported MCP config shape, or `{"mcpServers": {}}` for no tools:
 
 ```json
 {
@@ -72,86 +196,52 @@ assistant's global MCP settings. The supported local shape is:
 }
 ```
 
-For no tools use `{"mcpServers": {}}`. `${ROOT_DIR}`, `${AGENT_DIR}`, and exported
-variables from `.env`, `agent.env`, and the model file expand inside JSON string
-values. Define every placeholder. Preserve existing `.env` entries; do not put
-credential values in tracked JSON, prompts, command examples, or logs.
+Reuse `agents/timekeeper/mcp.config.json` as a bundled server example.
+`${ROOT_DIR}`, `${AGENT_DIR}`, and exported env variables expand inside JSON
+string values. Define every placeholder; keep credentials in root `.env`.
+Generated configs, logs, and PIDs belong in `.state/`; let the controller write
+them. Configure the agent's MCPs here rather than in the coding assistant's
+own global settings.
 
-The controller and bot run in the locked Pixi environment. Use `python` for
-bundled servers; reuse `agents/timekeeper/mcp.config.json` for local time tooling.
-Add Python server dependencies with `pixi add --pypi <package>` and commit both
-`pixi.toml` and `pixi.lock`. External servers may use their documented runtime.
-For external MCPs, verify their launch command, authentication steps, tool names,
-and filtering options. The current proxy configuration launches stdio servers; a
-remote HTTP MCP may need a supported stdio bridge. Do not invent a URL-based
-config shape or unsupported per-tool filters. Leave interactive account login to
-the user when it cannot be completed through their authorized session.
+Write a focused prompt matching the chosen capabilities. Exposed Telegram tool
+names are `<server>__<tool>`, such as `time__get_current_time`; verify names before
+using them in the prompt. Ground live-data answers in those tools. `system.md`
+is injected and re-read by the Telegram bot; it does not set the server web UI's
+system prompt. For Telegram, create its `.env` from its example if absent and
+set the token and allowed user IDs; never guess access IDs or expose the token.
 
-If persistent notes are requested, use `mcps/markdown/server.py` with
-`--target=${AGENT_MCP_MARKDOWN_TARGET}`. Set that variable in `agent.env`, for
-example `AGENT_MCP_MARKDOWN_TARGET="${AGENT_DIR}/notes.md"`, and create the file
-before starting its server. Scope access to the requested file or directory.
-Tell the prompt when to read and update these notes. Conversation history alone
-is in memory and disappears on reset/restart. Keep personal memory files ignored,
-including when an otherwise reusable agent template is tracked.
+Validate edited env files with Bash syntax checks, parse MCP JSON, and verify
+expanded paths, executables, variables, weights/projector files, and note targets.
+Use `git check-ignore` to confirm personal files and secrets stay ignored. For
+code changes run `pixi run check`; use `pixi run format` for Python formatting.
+Configuration-only work needs configuration validation, not tests matching text.
 
-The Telegram bridge exposes names as `<server>__<tool>`, such as
-`time__get_current_time` and `markdown__read_markdown`. Use verified exposed names
-when naming tools in the prompt. Account for schemas, history, tool results,
-reasoning, and image tokens when selecting context size. A large tool catalog
-can consume the context before the user sends a message; use documented server
-filters where appropriate.
-
-## Write the prompt and match capabilities
-
-Write a focused `system.md` covering the requested role, useful context, tone,
-output preferences, and when its configured tools or notes should be used.
-Ground requested live-data answers in those tools and handle unavailable data
-honestly. A prompt cannot grant tools, persistent storage, scheduling, audio, or
-background execution that the stack does not implement. Identify any requested
-capability that requires additional implementation instead of claiming it works.
-
-For vision, select a model profile with the matching family's
-`LLAMA_FLAG_MMPROJ` projector and verify that file exists. Telegram also needs
-`IMAGE_SUPPORT_ENABLED=true`. A loaded text-only model is not made vision-capable
-by that bot setting: check the running server's `/props` → `modalities.vision`
-and the bot's `/images` result. Check llama.cpp compatibility for newer GGUFs;
-missing tensors can indicate an old runtime, not a failed download. In particular,
-the included Qwen3.8 profiles were verified with build b11669.
-
-`system.md` is injected by the Telegram bridge and re-read on each model call;
-it does not configure the llama-server web UI's system prompt.
-
-## Validate and run within the request
-
-Check Bash syntax for edited env files, parse MCP JSON, resolve model/projector
-paths, and verify required variables and memory targets. For code changes, run
-`pixi run check` (lint, formatting, and tests). Use `pixi run format` to format
-Python changes. For configuration-only changes, validate the resulting
-configuration; avoid adding tests that restate file text.
-
-If running the agent is in scope, inspect `./llm.sh status` first. Use:
+Always give launch instructions with the actual chosen agent/model names:
 
 ```text
-./llm.sh start <agent> [model]
-./llm.sh restart <agent> [model]
+./llm.sh status
+./llm.sh start <agent>
 ./llm.sh logs llama
 ./llm.sh logs mcp
+pixi run --locked bot
 ```
 
-Omitting the model uses `AGENT_MODEL`; specifying one replaces model settings
-while preserving the agent's prompt and tools. Do not stop another running stack
-when the user only asked to prepare configuration. Stop the Telegram bot before
-switching agents/models, wait for the model to finish loading, then run
-`./start.sh` from `telegram-bot/`. A PID or startup message alone does not prove
-readiness: check the configured server's `/health` and test a short reply.
+Run them when launching is in scope. Only one agent stack runs at a time;
+inspect status and preserve the previous selection before changing it. Stop
+the bot with Ctrl+C before a switch, use
+`./llm.sh restart <agent> [model]`, wait for readiness, then restart the bot.
+Omitting the model restores that agent's `AGENT_MODEL` default. Include the
+exact command to restore a previous selection when replacing an existing setup,
+and `./llm.sh stop` to stop the stack.
 
-Verify the actual MCP tool list and an appropriate read-only call before claiming
-a service integration works. Exercise image input when vision is requested and
-runtime testing is authorized. Avoid test actions that write to external services
-or send real Telegram messages unless they are part of the user's request.
+A startup PID alone is not readiness. Check `/health` on the configured llama
+port, try a short model response, list actual MCP tools and make an appropriate
+read-only call. Test image input when requested and running tests is in scope.
+Avoid sending real Telegram messages or writing to external services unless
+requested. If runtime access is unavailable, distinguish validated configuration
+from untested inference or service integration.
 
-Report the created/changed files, chosen model, configured tools, exact start and
-switch-back commands, and any remaining login or installation step. Distinguish
-configuration checks from live inference/tool tests. Follow the user's existing
-Git instructions; preparing a personal agent does not itself imply publishing it.
+Finish with the selected model/quantization and hardware rationale, configured
+capabilities, created file paths, validation results, launch/switch-back commands,
+and any remaining login or installation step. Preparing an agent does not itself
+imply committing or publishing it; follow the user's existing Git instructions.
